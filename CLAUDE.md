@@ -168,8 +168,9 @@ When adding tests:
 ## Version and Dependencies
 
 - Python 3.8+ required
-- Key dependencies: setuptools, requests==2.32.4, pandas>=2.0.3, beautifulsoup4>=4.12.3, pydantic>=2.8.2, websockets>=13.1, websocket-client>=1.8.0
-- Current version: 0.4.19 (see setup.py:19)
+- Key dependencies: requests==2.32.4, pandas>=2.0.3, beautifulsoup4>=4.12.3, pydantic>=2.8.2, websockets>=13.1, websocket-client>=1.8.0, python-dotenv>=1.0.1
+- Data files (in `tradingview_scraper/data/`) are located via `utils.get_data_file_path()` (a `__file__`-relative resolver), not `pkg_resources`, so the package works on Python 3.8–3.13 without a runtime `setuptools` dependency
+- Current version: 0.4.20 (see setup.py:19)
 
 ## CI/CD
 
