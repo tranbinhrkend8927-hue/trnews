@@ -11,6 +11,7 @@ from tradingview_scraper.symbols.utils import (
     generate_user_agent,
     validate_string_array
 )
+from tradingview_scraper.symbols.http_client import TradingViewHttpClient
 
 class DividendEvent(TypedDict):
     """
@@ -107,10 +108,11 @@ class CalendarScraper:
         export_type (str): Optional. The type of file to export the data to. Can be 'json' or 'csv'. Defaults to 'json'.
     """
 
-    def __init__(self, export_result: bool = False, export_type: str = "json"):
+    def __init__(self, export_result: bool = False, export_type: str = "json", http_client=None):
         self.export_result: bool = export_result
         self.export_type: str = export_type
         self.headers: Dict[str, str] = {"User-Agent": generate_user_agent()}
+        self.http_client = http_client or TradingViewHttpClient(timeout=5)
 
     def _export(
         self, data, symbol: Union[str, None] = None, data_category: Union[str, None] = None
@@ -120,6 +122,12 @@ class CalendarScraper:
                 save_json_file(data, symbol=symbol, data_category=data_category)
             elif self.export_type == "csv":
                 save_csv_file(data, symbol=symbol, data_category=data_category)
+
+    @staticmethod
+    def _event_value(event_data, index):
+        if not isinstance(event_data, list) or index >= len(event_data):
+            return None
+        return event_data[index] if event_data[index] is not None else None
 
     def scrape_dividends(
         self,
@@ -194,36 +202,37 @@ class CalendarScraper:
         if markets:
             payload["markets"] = markets
 
-        response = requests.post(url, headers=self.headers, data=json.dumps(payload), timeout=5)
+        response = self.http_client.post(url, headers=self.headers, data=json.dumps(payload), timeout=5)
         response.raise_for_status()
 
         # Parse the result into a list
         dividend_events: List[DividendEvent] = []
 
-        for event in response.json()["data"]:
-            event_data = event.get("d")
+        for event in response.json().get("data") or []:
+            event_data = event.get("d") or []
             event_symbol: str = event.get("s")
 
             if not event_symbol:
                 continue
 
             if not values:
+                value = self._event_value
                 dividend_event = DividendEvent(
                     full_symbol=event_symbol,
-                    dividend_ex_date_recent=event_data[0] or None,
-                    dividend_ex_date_upcoming=event_data[1] or None,
-                    logoid=event_data[2] or None,
-                    name=event_data[3] or None,
-                    description=event_data[4] or None,
-                    dividends_yield=event_data[5] or None,
-                    dividend_payment_date_recent=event_data[6] or None,
-                    dividend_payment_date_upcoming=event_data[7] or None,
-                    dividend_amount_recent=event_data[8] or None,
-                    dividend_amount_upcoming=event_data[9] or None,
-                    fundamental_currency_code=event_data[10] or None,
-                    market=event_data[11] or None,
+                    dividend_ex_date_recent=value(event_data, 0),
+                    dividend_ex_date_upcoming=value(event_data, 1),
+                    logoid=value(event_data, 2),
+                    name=value(event_data, 3),
+                    description=value(event_data, 4),
+                    dividends_yield=value(event_data, 5),
+                    dividend_payment_date_recent=value(event_data, 6),
+                    dividend_payment_date_upcoming=value(event_data, 7),
+                    dividend_amount_recent=value(event_data, 8),
+                    dividend_amount_upcoming=value(event_data, 9),
+                    fundamental_currency_code=value(event_data, 10),
+                    market=value(event_data, 11),
                 )
-                dividend_event = {k:v for k,v in dividend_event.items() if v}
+                dividend_event = {k:v for k,v in dividend_event.items() if v is not None}
                 dividend_events.append(dividend_event)
 
             else:
@@ -242,10 +251,10 @@ class CalendarScraper:
                     fundamental_currency_code=None,
                     market=None,
                 )
-                dividend_event = {k:v for k,v in dividend_event.items() if v}
+                dividend_event = {k:v for k,v in dividend_event.items() if v is not None}
 
                 for i, value in enumerate(values):
-                    dividend_event[value] = event_data[i]
+                    dividend_event[value] = self._event_value(event_data, i)
 
                 dividend_events.append(dividend_event)
 
@@ -337,48 +346,49 @@ class CalendarScraper:
         if markets:
             payload["markets"] = markets
 
-        response = requests.post(url, headers=self.headers, data=json.dumps(payload), timeout=5)
+        response = self.http_client.post(url, headers=self.headers, data=json.dumps(payload), timeout=5)
         response.raise_for_status()
 
         # Parse the result into a list
         earnings_events: List[EarningsEvent] = []
 
-        for event in response.json()["data"]:
-            event_data = event.get("d")
+        for event in response.json().get("data") or []:
+            event_data = event.get("d") or []
             event_symbol: str = event.get("s")
 
             if not event_symbol:
                 continue
 
             if not values:
+                value = self._event_value
                 earnings_event = EarningsEvent(
                     full_symbol=event_symbol,
-                    earnings_release_next_date=event_data[0] or None,
-                    logoid=event_data[1] or None,
-                    name=event_data[2] or None,
-                    description=event_data[3] or None,
-                    earnings_per_share_fq=event_data[4] or None,
-                    earnings_per_share_forecast_next_fq=event_data[5] or None,
-                    eps_surprise_fq=event_data[6] or None,
-                    eps_surprise_percent_fq=event_data[7] or None,
-                    revenue_fq=event_data[8] or None,
-                    revenue_forecast_next_fq=event_data[9] or None,
-                    market_cap_basic=event_data[10] or None,
-                    earnings_release_time=event_data[11] or None,
-                    earnings_release_next_time=event_data[12] or None,
-                    earnings_per_share_forecast_fq=event_data[13] or None,
-                    revenue_forecast_fq=event_data[14] or None,
-                    fundamental_currency_code=event_data[15] or None,
-                    market=event_data[16] or None,
-                    earnings_publication_type_fq=event_data[17] or None,
-                    earnings_publication_type_next_fq=event_data[18] or None,
-                    revenue_surprise_fq=event_data[19] or None,
-                    revenue_surprise_percent_fq=event_data[20] or None,
+                    earnings_release_next_date=value(event_data, 0),
+                    logoid=value(event_data, 1),
+                    name=value(event_data, 2),
+                    description=value(event_data, 3),
+                    earnings_per_share_fq=value(event_data, 4),
+                    earnings_per_share_forecast_next_fq=value(event_data, 5),
+                    eps_surprise_fq=value(event_data, 6),
+                    eps_surprise_percent_fq=value(event_data, 7),
+                    revenue_fq=value(event_data, 8),
+                    revenue_forecast_next_fq=value(event_data, 9),
+                    market_cap_basic=value(event_data, 10),
+                    earnings_release_time=value(event_data, 11),
+                    earnings_release_next_time=value(event_data, 12),
+                    earnings_per_share_forecast_fq=value(event_data, 13),
+                    revenue_forecast_fq=value(event_data, 14),
+                    fundamental_currency_code=value(event_data, 15),
+                    market=value(event_data, 16),
+                    earnings_publication_type_fq=value(event_data, 17),
+                    earnings_publication_type_next_fq=value(event_data, 18),
+                    revenue_surprise_fq=value(event_data, 19),
+                    revenue_surprise_percent_fq=value(event_data, 20),
                 )
-                earnings_event = {k:v for k,v in earnings_event.items() if v}
+                earnings_event = {k:v for k,v in earnings_event.items() if v is not None}
 
                 earnings_events.append(earnings_event)
-        
+
             else:
                 earnings_event = EarningsEvent(
                     full_symbol=event_symbol,
@@ -404,10 +414,10 @@ class CalendarScraper:
                     revenue_surprise_fq=None,
                     revenue_surprise_percent_fq=None,
                 )
-                earnings_event = {k:v for k,v in earnings_event.items() if v}
+                earnings_event = {k:v for k,v in earnings_event.items() if v is not None}
 
                 for i, value in enumerate(values):
-                    earnings_event[value] = event_data[i]
+                    earnings_event[value] = self._event_value(event_data, i)
 
                 earnings_events.append(earnings_event)
 

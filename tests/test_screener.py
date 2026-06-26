@@ -90,7 +90,7 @@ class TestScreener:
 
         assert payload['columns'] == custom_columns
 
-    @mock.patch('tradingview_scraper.symbols.screener.requests.post')
+    @mock.patch('tradingview_scraper.symbols.screener.TradingViewHttpClient.post')
     def test_screen_success(self, mock_post, screener):
         """Test successful screening."""
         # Mock response
@@ -121,7 +121,7 @@ class TestScreener:
         assert len(result['data']) == 2
         assert result['data'][0]['symbol'] == 'NASDAQ:AAPL'
 
-    @mock.patch('tradingview_scraper.symbols.screener.requests.post')
+    @mock.patch('tradingview_scraper.symbols.screener.TradingViewHttpClient.post')
     def test_screen_with_filters(self, mock_post, screener):
         """Test screening with filters."""
         # Mock response
@@ -149,7 +149,7 @@ class TestScreener:
         assert result['status'] == 'success'
         assert len(result['data']) == 1
 
-    @mock.patch('tradingview_scraper.symbols.screener.requests.post')
+    @mock.patch('tradingview_scraper.symbols.screener.TradingViewHttpClient.post')
     def test_screen_http_error(self, mock_post, screener):
         """Test screening with HTTP error."""
         # Mock error response
@@ -166,7 +166,7 @@ class TestScreener:
         assert result['status'] == 'failed'
         assert 'error' in result
 
-    @mock.patch('tradingview_scraper.symbols.screener.requests.post')
+    @mock.patch('tradingview_scraper.symbols.screener.TradingViewHttpClient.post')
     def test_screen_request_exception(self, mock_post, screener):
         """Test screening with request exception."""
         # Mock exception

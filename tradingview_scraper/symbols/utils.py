@@ -1,10 +1,37 @@
 import os
 import json
 import random
+import re
+import tempfile
+import time
+import uuid
 from datetime import datetime
 from typing import List
 
 import pandas as pd
+
+
+def get_data_file_path(filename: str) -> str:
+    """Resolve the absolute path to a file in the package's ``data`` directory.
+
+    Resolves the path relative to this package instead of using the deprecated
+    ``pkg_resources``. This works across Python versions (3.8+) and for both
+    regular and editable (``pip install -e``) installs, since the ``data``
+    directory always sits alongside the ``symbols`` package.
+
+    Parameters
+    ----------
+    filename : str
+        The name of the file inside ``tradingview_scraper/data`` (e.g.
+        ``'indicators.txt'``).
+
+    Returns
+    -------
+    str
+        The absolute path to the requested data file.
+    """
+    package_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(package_root, 'data', filename)
 
 
 def ensure_export_directory(path='/export'):
@@ -22,10 +49,24 @@ def ensure_export_directory(path='/export'):
     """
     if not os.path.exists(path):
         try:
-            os.makedirs(path)
+            os.makedirs(path, exist_ok=True)
             print(f"[INFO] Directory {path} created.")
         except Exception as e:
             print(f"[ERROR] Error creating directory {path}: {e}")
+
+def _sanitize_export_component(value, default='data'):
+    """Return a path-safe filename component."""
+    if value is None:
+        return ''
+
+    component = str(value).strip()
+    component = component.replace(os.sep, '_')
+    if os.altsep:
+        component = component.replace(os.altsep, '_')
+    component = component.replace('..', '_')
+    component = re.sub(r'[^A-Za-z0-9._-]+', '_', component)
+    component = component.strip('._')
+    return component or default
 
 def generate_export_filepath(symbol, data_category, timeframe, file_extension):
     """Generate a file path for exporting data, including the current timestamp.
@@ -50,12 +91,46 @@ def generate_export_filepath(symbol, data_category, timeframe, file_extension):
         The generated file path, structured as:
         "<current_directory>/export/<data_category>_<symbol>_<timestamp><file_extension>".
     """
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    symbol_lower = f'{symbol.lower()}_' if symbol else ''
-    timeframe = f'{timeframe}_' if timeframe else ''
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    unique_suffix = f"{time_ns()}-{uuid.uuid4().hex}"
+    safe_category = _sanitize_export_component(data_category)
+    safe_symbol = _sanitize_export_component(symbol.lower()) if symbol else ''
+    safe_timeframe = _sanitize_export_component(timeframe) if timeframe else ''
+    symbol_part = f'{safe_symbol}_' if safe_symbol else ''
+    timeframe_part = f'{safe_timeframe}_' if safe_timeframe else ''
+
     root_path = os.getcwd()
-    path = os.path.join(root_path, "export", f"{data_category}_{symbol_lower}{timeframe}{timestamp}{file_extension}")
+    export_dir = os.path.abspath(os.path.join(root_path, "export"))
+    filename = f"{safe_category}_{symbol_part}{timeframe_part}{timestamp}_{unique_suffix}{file_extension}"
+    path = os.path.abspath(os.path.join(export_dir, filename))
+
+    if os.path.commonpath([export_dir, path]) != export_dir:
+        raise ValueError("Generated export path escapes the export directory")
+
     return path
+
+def time_ns():
+    return time.time_ns()
+
+def _atomic_replace(write_callback, output_path):
+    directory = os.path.dirname(output_path)
+    ensure_export_directory(directory)
+    temp_path = None
+
+    try:
+        with tempfile.NamedTemporaryFile('w', dir=directory, delete=False) as tmp:
+            temp_path = tmp.name
+            write_callback(tmp)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+        os.replace(temp_path, output_path)
+    except Exception:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+        raise
 
 def save_json_file(data, **kwargs):
     """
@@ -90,10 +165,11 @@ def save_json_file(data, **kwargs):
     timeframe = kwargs.get('timeframe', '')
     
     output_path = generate_export_filepath(symbol, data_category, timeframe, '.json')
-    ensure_export_directory(os.path.dirname(output_path))  # Ensure the directory exists
     try:
-        with open(output_path, 'w') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        def write_json(file_obj):
+            json.dump(data, file_obj, ensure_ascii=False, indent=2)
+
+        _atomic_replace(write_json, output_path)
         print(f"[INFO] JSON file saved at: {output_path}")
     except FileNotFoundError:
         print(f"[ERROR] Error: The directory for {output_path} does not exist.")
@@ -137,10 +213,13 @@ def save_csv_file(data, **kwargs):
     timeframe = kwargs.get('timeframe', '')
 
     output_path = generate_export_filepath(symbol, data_category, timeframe, '.csv')
-    ensure_export_directory(os.path.dirname(output_path))  # Ensure the directory exists
     try:
         df = pd.DataFrame.from_dict(data)
-        df.to_csv(output_path, index=False)
+
+        def write_csv(file_obj):
+            df.to_csv(file_obj, index=False)
+
+        _atomic_replace(write_csv, output_path)
         print(f"[INFO] CSV file saved at: {output_path}")
     except ValueError as e:
         print(f"[ERROR] Error: The data provided is not in a suitable format for a DataFrame. {e}")
@@ -150,6 +229,18 @@ def save_csv_file(data, **kwargs):
         print(f"[ERROR] Error: Permission denied when trying to write to {output_path}.")
     except Exception as e:
         print(f"[ERROR] An unexpected error occurred: {e}")
+
+class Exporter:
+    """Exports scraper results using the existing JSON/CSV helper functions."""
+
+    def __init__(self, export_type='json'):
+        self.export_type = export_type
+
+    def export(self, data, symbol=None, data_category=None, timeframe=''):
+        if self.export_type == 'json':
+            save_json_file(data=data, symbol=symbol, data_category=data_category, timeframe=timeframe)
+        elif self.export_type == 'csv':
+            save_csv_file(data=data, symbol=symbol, data_category=data_category, timeframe=timeframe)
 
 def generate_user_agent():
     """

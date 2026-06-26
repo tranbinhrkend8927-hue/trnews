@@ -6,6 +6,7 @@ __pycache__/
 .Python
 env/
 venv/
+.venv/
 ENV/
 env.bak/
 venv.bak/
@@ -25,6 +26,7 @@ tradingview_scraper.egg-info/*
 
 # Pytest
 .cache
+.pytest_cache/
 
 # Coverage
 coverage.xml
@@ -47,7 +49,7 @@ pylint-output.txt
 *.log
 *.pot
 *.pyc
-/export/*.json
+export/
 
 # Ignore test script
 *test.py

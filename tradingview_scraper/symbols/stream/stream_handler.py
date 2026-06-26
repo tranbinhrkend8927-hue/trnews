@@ -11,10 +11,6 @@ import secrets
 
 from websocket import create_connection
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
-
 
 class StreamHandler:
     """
@@ -143,7 +139,8 @@ class StreamHandler:
             args (list): The arguments to be sent with the message.
         """
         message = self.create_message(func, args)
-        logging.debug("Sending message: %s", message)
+        log_args = ["<redacted>"] if func == "set_auth_token" else args
+        logging.debug("Sending message: %s", self.create_message(func, log_args))
 
         try:
             self.ws.send(message)

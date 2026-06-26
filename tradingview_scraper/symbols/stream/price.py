@@ -13,10 +13,6 @@ import secrets
 from websocket import create_connection, WebSocketConnectionClosedException
 import requests
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
-
 
 class RealTimeData:
     def __init__(self):
@@ -74,7 +70,7 @@ class RealTimeData:
                     break  # Exit the retry loop on success
 
                 except requests.RequestException as e:
-                    if res.status_code == 404:
+                    if getattr(e.response, "status_code", None) == 404:
                         raise ValueError(f"Invalid exchange:symbol '{item}' after {retries} attempts") from e
 
                     logging.warning("Attempt %d failed to validate exchange:symbol '%s': %s", attempt + 1, item, e)
@@ -149,7 +145,8 @@ class RealTimeData:
             args (list): The arguments for the function.
         """
         message = self.create_message(func, args)
-        logging.debug("Sending message: %s", message)
+        log_args = ["<redacted>"] if func == "set_auth_token" else args
+        logging.debug("Sending message: %s", self.create_message(func, log_args))
         
         try:
             self.ws.send(message)
@@ -257,11 +254,9 @@ class RealTimeData:
         try:
             while True:
                 try:
-                    sleep(1)
                     result = self.ws.recv()
                     # Check if the result is a heartbeat or actual data
                     if re.match(r"~m~\d+~m~~h~\d+$", result):
-                        self.ws.recv()  # Echo back the message
                         logging.debug(f"Received heartbeat: {result}")
                         self.ws.send(result)
                     else:
@@ -297,13 +292,9 @@ def signal_handler(sig, frame):
     exit(0)
 
 
-# Register the signal handler
-signal.signal(signal.SIGINT, signal_handler)
-
-
-
 # Example Usage
 if __name__ == "__main__":
+    signal.signal(signal.SIGINT, signal_handler)
     real_time_data = RealTimeData()
 
     exchange_symbol = ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "FXOPEN:XAUUSD"]  # Example symbol
@@ -316,4 +307,3 @@ if __name__ == "__main__":
     for packet in data_generator:
         print('-'*50)
         print(packet)
-

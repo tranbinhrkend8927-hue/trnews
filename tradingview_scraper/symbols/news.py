@@ -2,19 +2,31 @@
 
 import os
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from bs4 import BeautifulSoup
 import requests
-import pkg_resources
 
-
-from tradingview_scraper.symbols.utils import save_csv_file, save_json_file, generate_user_agent
+from tradingview_scraper.symbols.utils import (
+    save_csv_file,
+    save_json_file,
+    generate_user_agent,
+    get_data_file_path,
+)
+from tradingview_scraper.symbols.exceptions import DataNotFoundError
+from tradingview_scraper.symbols.http_client import TradingViewHttpClient
 
 class NewsScraper:
-    def __init__(self, export_result=False, export_type='json'):
+    def __init__(self, export_result=False, export_type='json', http_client=None):
         self.export_result = export_result
         self.export_type = export_type
         self.headers = {"user-agent": generate_user_agent()}
+        self.http_client = http_client or TradingViewHttpClient(timeout=5)
+
+        # Load TRADINGVIEW_COOKIE for accessing paywalled content (e.g., Reuters)
+        cookie = os.getenv("TRADINGVIEW_COOKIE", "")
+        if cookie:
+            self.headers["cookie"] = cookie
 
         self.exchanges = self._load_exchanges()
         self.languages = self._load_languages()
@@ -82,15 +94,16 @@ class NewsScraper:
         Raises:
             requests.HTTPError: If the HTTP request to fetch the article fails.
         """
-        # construct the URL
-        url = f"https://tradingview.com{story_path}"
-        
-        response = requests.get(url, headers=self.headers, timeout=5)
+        # construct the URL (use www subdomain so cookies are sent to the correct host;
+        # a redirect from the bare domain would drop the cookie and break paywall access)
+        url = f"https://www.tradingview.com{story_path}"
+
+        response = self.http_client.get(url, headers=self.headers, timeout=5)
         response.raise_for_status()
 
         # Use BeautifulSoup to parse the HTML
         soup = BeautifulSoup(response.text, "html.parser")
-        
+
         article_tag = soup.find('article')
         row_tags = soup.find('div', class_=lambda x: x and x.startswith('rowTags-'))
 
@@ -102,31 +115,38 @@ class NewsScraper:
             "body": [],
             "tags": []
         }
-        
+
+        if article_tag is None:
+            return article_json
+
+        # Helper: class prefix matcher (TradingView uses CSS Modules with hash suffixes that change per deploy)
+        def has_class_prefix(prefix):
+            return lambda c: c and any(cls.startswith(prefix) for cls in (c if isinstance(c, list) else [c]))
+
         # Extracting the fields
         # Breadcrumbs
         breadcrumbs = article_tag.find('nav', {'aria-label': 'Breadcrumbs'})
         if breadcrumbs:
             article_json['breadcrumbs'] = ' > '.join(
-                [item.get_text(strip=True) for item in breadcrumbs.find_all('span', class_='breadcrumb-content-cZAS4vtj')]
+                [item.get_text(strip=True) for item in breadcrumbs.find_all('span', class_=has_class_prefix('breadcrumb-content-'))]
             )
 
-        # Title
-        title = article_tag.find('h1', class_='title-KX2tCBZq')
+        # Title: use first <h1> (most stable, no hash dependency)
+        title = article_tag.find('h1')
         if title:
             article_json['title'] = title.get_text(strip=True)
 
         # Published Date
         published_time = article_tag.find('time')
         if published_time:
-            article_json['published_datetime'] = published_time['datetime']
+            article_json['published_datetime'] = published_time.get('datetime')
 
         # Symbol Exchange and Logo
-        symbol_container = article_tag.find('div', class_='symbolsContainer-cBh_FN2P')
+        symbol_container = article_tag.find('div', class_=has_class_prefix('symbolsContainer-'))
         if symbol_container:
             for a in symbol_container.find_all('a'):
                 if a:
-                    symbol_name_tag = a.find('span', class_='description-cBh_FN2P')
+                    symbol_name_tag = a.find('span', class_=has_class_prefix('description-'))
                     if symbol_name_tag:
                         symbol_name = symbol_name_tag.get_text(strip=True)
                         if symbol_name:
@@ -134,18 +154,23 @@ class NewsScraper:
                             article_json['related_symbols'].append({'symbol': symbol_name, 'logo': symbol_img})
 
         # Body extraction
-        body_content = article_tag.find('div', class_='body-KX2tCBZq')
+        body_content = article_tag.find('div', class_=has_class_prefix('body-'))
         if body_content:
             for element in body_content.find_all(['p', 'img'], recursive=True):
                 if element.name == 'p':
-                    article_json['body'].append({
-                        "type": "text",
-                        "content": element.get_text(strip=True)
-                    })
+                    text_content = element.get_text(strip=True)
+                    if text_content:  # Skip empty paragraphs
+                        article_json['body'].append({
+                            "type": "text",
+                            "content": text_content
+                        })
                 elif element.name == 'img':
+                    src = element.get('src')
+                    if not src:
+                        continue
                     article_json['body'].append({
                         "type": "image",
-                        "src": element['src'],
+                        "src": src,
                         "alt": element.get('alt', '')
                     })
 
@@ -157,6 +182,43 @@ class NewsScraper:
                     article_json['tags'].append(a.text)
         
         return article_json
+
+    def scrape_news_contents(self, story_paths, max_workers=5):
+        """
+        Scrape multiple news articles with bounded concurrency.
+
+        Returns a dict with ``results`` and ``errors`` so one failed article does
+        not discard successfully fetched articles.
+        """
+        paths = list(story_paths or [])
+        if not paths:
+            return {"results": [], "errors": []}
+
+        worker_count = max(1, min(max_workers, len(paths)))
+        results = [None] * len(paths)
+        errors = []
+
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = {
+                executor.submit(self._scrape_news_content_threadsafe, story_path): (index, story_path)
+                for index, story_path in enumerate(paths)
+            }
+            for future in as_completed(futures):
+                index, story_path = futures[future]
+                try:
+                    results[index] = future.result()
+                except Exception as exc:
+                    errors.append({"story_path": story_path, "error": str(exc)})
+
+        return {"results": [item for item in results if item is not None], "errors": errors}
+
+    def _scrape_news_content_threadsafe(self, story_path):
+        scraper = object.__new__(NewsScraper)
+        scraper.export_result = False
+        scraper.export_type = self.export_type
+        scraper.headers = dict(self.headers)
+        scraper.http_client = TradingViewHttpClient(timeout=5)
+        return scraper.scrape_news_content(story_path)
 
 
     def scrape_headlines(
@@ -235,14 +297,14 @@ class NewsScraper:
         url = f"https://news-headlines.tradingview.com/v2/view/headlines/symbol?client=web&lang={language}&area={area_code}&provider={provider}&section={section}&streaming=&symbol={exchange}:{symbol}"
         
         try:
-            response = requests.get(url, headers=self.headers, timeout=5)
+            response = self.http_client.get(url, headers=self.headers, timeout=5)
             response.raise_for_status()  # Raises HTTPError for bad responses (4xx and 5xx)
             
             response_json = response.json()
             items = response_json.get('items', [])
             
             if not items:
-                return []  # Return empty list if no items
+                return []
             
             news_list = self._sort_news(items, sort)
                         
@@ -298,7 +360,7 @@ class NewsScraper:
         Raises:
             IOError: If there is an error reading the file.
         """
-        path = pkg_resources.resource_filename('tradingview_scraper', 'data/languages.json')
+        path = get_data_file_path('languages.json')
         if not os.path.exists(path):
             print(f"[ERROR] Languages file not found at {path}.")
             return []
@@ -320,7 +382,7 @@ class NewsScraper:
         Raises:
             IOError: If there is an error reading the file.
         """
-        path = pkg_resources.resource_filename('tradingview_scraper', 'data/exchanges.txt')
+        path = get_data_file_path('exchanges.txt')
         if not os.path.exists(path):
             print(f"[ERROR] Exchanges file not found at {path}.")
             return []
@@ -342,7 +404,7 @@ class NewsScraper:
         Raises:
             IOError: If there is an error reading the file.
         """
-        path = pkg_resources.resource_filename('tradingview_scraper', 'data/news_providers.txt')
+        path = get_data_file_path('news_providers.txt')
         if not os.path.exists(path):
             print(f"[ERROR] News provider file not found at {path}.")
             return []
@@ -364,7 +426,7 @@ class NewsScraper:
         Raises:
             IOError: If there is an error reading the file.
         """
-        path = pkg_resources.resource_filename('tradingview_scraper', 'data/areas.json')
+        path = get_data_file_path('areas.json')
         if not os.path.exists(path):
             print(f"[ERROR] Areas file not found at {path}.")
             return []

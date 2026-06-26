@@ -6,17 +6,17 @@ import logging
 import requests
 from requests.exceptions import RequestException, JSONDecodeError
 from tradingview_scraper.symbols.utils import save_csv_file, save_json_file, generate_user_agent
+from tradingview_scraper.symbols.exceptions import DataNotFoundError
+from tradingview_scraper.symbols.http_client import TradingViewHttpClient
 
-#loading environment variables
-from dotenv import load_dotenv
 import os
-load_dotenv()
 
 class Ideas:
-    def __init__(self, export_result=False, export_type='json'):
+    def __init__(self, export_result=False, export_type='json', http_client=None):
         self.export_result = export_result
         self.export_type = export_type
         self.headers = {"user-agent": generate_user_agent()}
+        self.http_client = http_client or TradingViewHttpClient(timeout=5)
         
     def scrape(
         self,
@@ -114,7 +114,7 @@ class Ideas:
             params["sort"] = "recent" # default is popular so only include for recent
         
         try:
-            response = requests.get(url, headers=self.headers, params=params, timeout=5)
+            response = self.http_client.get(url, headers=self.headers, params=params, timeout=5)
             if response.status_code != 200:
                 logging.error(f"HTTP {response.status_code}: Failed to fetch page {page} for {symbol}")
                 return []
@@ -125,7 +125,10 @@ class Ideas:
         
             ideas_data = data.get('data', {}).get('ideas', {}).get('data', {})
             items = ideas_data.get('items', [])
-            
+
+            if not items:
+                return []
+
             # Transform each item to desired output format
             ideas = []
             for item in items:

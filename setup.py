@@ -43,7 +43,6 @@ setup(
         ],
     },
     install_requires=[
-        "setuptools",
         "requests==2.32.4",
         "pandas>=2.0.3",
         "beautifulsoup4>=4.12.3",
@@ -51,6 +50,7 @@ setup(
         "websockets>=13.1",
         "websocket-client>=1.8.0",
         "python-dotenv>=1.0.1",
+        "psycopg[binary]>=3.2.0",
     ],
     keywords=['tradingview', 'scraper', 'python', 'crawler', 'financial'],
     classifiers=classifiers

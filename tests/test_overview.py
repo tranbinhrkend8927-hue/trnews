@@ -58,7 +58,7 @@ class TestOverview:
         )
         assert len(overview.ALL_FIELDS) == total_fields
 
-    @mock.patch('tradingview_scraper.symbols.overview.requests.get')
+    @mock.patch('tradingview_scraper.symbols.overview.TradingViewHttpClient.get')
     def test_get_symbol_overview_success(self, mock_get, overview):
         """Test successful retrieval of symbol overview."""
         # Mock response
@@ -83,7 +83,7 @@ class TestOverview:
         assert result['data']['name'] == 'AAPL'
         assert result['data']['symbol'] == 'NASDAQ:AAPL'
 
-    @mock.patch('tradingview_scraper.symbols.overview.requests.get')
+    @mock.patch('tradingview_scraper.symbols.overview.TradingViewHttpClient.get')
     def test_get_symbol_overview_no_data(self, mock_get, overview):
         """Test getting overview with no data."""
         # Mock response with empty data
@@ -100,7 +100,7 @@ class TestOverview:
         assert result['status'] == 'failed'
         assert 'error' in result
 
-    @mock.patch('tradingview_scraper.symbols.overview.requests.get')
+    @mock.patch('tradingview_scraper.symbols.overview.TradingViewHttpClient.get')
     def test_get_symbol_overview_http_error(self, mock_get, overview):
         """Test getting overview with HTTP error."""
         # Mock error response
@@ -117,7 +117,7 @@ class TestOverview:
         assert result['status'] == 'failed'
         assert 'error' in result
 
-    @mock.patch('tradingview_scraper.symbols.overview.requests.get')
+    @mock.patch('tradingview_scraper.symbols.overview.TradingViewHttpClient.get')
     def test_get_symbol_overview_request_exception(self, mock_get, overview):
         """Test getting overview with request exception."""
         # Mock exception

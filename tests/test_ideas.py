@@ -16,7 +16,7 @@ class TestIdeas:
         """Fixture to create an instance of Ideas for testing."""
         return Ideas(export_result=False)
 
-    @mock.patch('tradingview_scraper.symbols.ideas.requests.get')
+    @mock.patch('tradingview_scraper.symbols.ideas.TradingViewHttpClient.get')
     def test_scrape_recent_ideas_success(self, mock_get, ideas_scraper):
         """Test scraping recent ideas successfully with mocked response."""
         # Mock response for recent ideas
@@ -54,8 +54,8 @@ class TestIdeas:
         assert ideas[0]['views_count'] == 100
         assert ideas[0]['likes_count'] == 5
 
-    @mock.patch('tradingview_scraper.symbols.ideas.requests.get')
-    def test_scrape_no_ideas(self, mock_get, ideas_scraper):
+    @mock.patch('tradingview_scraper.symbols.ideas.TradingViewHttpClient.get')
+    def test_scrape_no_ideas(self, mock_get, ideas_scraper, caplog):
         """Test handling of no ideas found with mocked response."""
         mock_response = mock.Mock()
         mock_response.status_code = 200
@@ -74,8 +74,9 @@ class TestIdeas:
         ideas = ideas_scraper.scrape(symbol="NASDAQ-NDX", sort="popular", startPage=1, endPage=1)
 
         assert ideas == []
+        assert "Unexpected error" not in caplog.text
 
-    @mock.patch('tradingview_scraper.symbols.ideas.requests.get')
+    @mock.patch('tradingview_scraper.symbols.ideas.TradingViewHttpClient.get')
     def test_scrape_invalid_sort(self, mock_get, ideas_scraper):
         """Test handling of invalid sort argument."""
         ideas = ideas_scraper.scrape(symbol="NASDAQ-NDX", sort="invalid_sort", startPage=1, endPage=1)
@@ -136,4 +137,3 @@ class TestIdeas:
             assert 'views_count' in idea
             assert 'likes_count' in idea
             assert 'timestamp' in idea
-        

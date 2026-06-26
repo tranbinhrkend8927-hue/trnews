@@ -260,6 +260,46 @@ class Minds:
                 'error': f'Request failed: {str(e)}'
             }
 
+    def iter_minds_pages(self, symbol: str, sort: str = 'recent', page_size: int = 50):
+        """Yield parsed Minds pages one at a time instead of collecting all pages."""
+        symbol = self._validate_symbol(symbol)
+        sort_option = self._validate_sort(sort)
+        next_cursor = None
+
+        while True:
+            params = {
+                'symbol': symbol,
+                'limit': page_size,
+                'sort': sort_option,
+            }
+            if next_cursor:
+                params['c'] = next_cursor
+
+            response = requests.get(
+                self.MINDS_API_URL,
+                params=params,
+                headers=self.headers,
+                timeout=10
+            )
+            response.raise_for_status()
+            json_response = response.json()
+            results = json_response.get('results', [])
+            if not results:
+                return
+
+            next_url = json_response.get('next', '')
+            next_cursor = next_url.split('?c=')[1].split('&')[0] if '?c=' in next_url else None
+            meta = json_response.get('meta', {})
+
+            yield {
+                'data': [self._parse_mind(item) for item in results],
+                'symbol_info': meta.get('symbols_info', {}).get(symbol, {}),
+                'next_cursor': next_cursor,
+            }
+
+            if not next_cursor:
+                return
+
     def get_all_minds(
         self,
         symbol: str,

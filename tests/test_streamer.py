@@ -7,21 +7,76 @@ Set the TRADINGVIEW_JWT_TOKEN environment variable to run these tests:
 """
 import pytest
 import json
+import importlib
 import os
 import time
+from types import SimpleNamespace
+from unittest import mock
 from tradingview_scraper.symbols.stream import Streamer
 
 
 # Get JWT token from environment variable
 JWT_TOKEN = os.getenv("TRADINGVIEW_JWT_TOKEN", "")
-
-# Skip all tests if JWT token is not set
-pytestmark = pytest.mark.skipif(
+LIVE_STREAMER_TEST = pytest.mark.skipif(
     not JWT_TOKEN,
-    reason="TRADINGVIEW_JWT_TOKEN environment variable not set. Set it to run these tests."
+    reason="TRADINGVIEW_JWT_TOKEN environment variable not set. Set it to run these tests.",
 )
+streamer_module = importlib.import_module("tradingview_scraper.symbols.stream.streamer")
 
 
+class TestStreamerMock:
+    def _streamer(self):
+        streamer = object.__new__(Streamer)
+        streamer.export_result = True
+        streamer.export_type = "json"
+        streamer.study_id_to_name_map = {}
+        streamer.stream_obj = SimpleNamespace(
+            quote_session="qs_mock",
+            chart_session="cs_mock",
+            ws=mock.Mock(),
+        )
+        return streamer
+
+    def test_get_data_handles_bad_websocket_message(self, monkeypatch):
+        streamer = self._streamer()
+        streamer.stream_obj.ws.recv.return_value = "~m~3~m~bad"
+        monkeypatch.setattr(streamer_module, "sleep", lambda _: None)
+
+        assert list(streamer.get_data()) == []
+        streamer.stream_obj.ws.close.assert_called_once()
+
+    def test_stream_raises_when_no_ohlc_packet_arrives(self, monkeypatch):
+        streamer = self._streamer()
+        packets = iter({"m": "du", "p": []} for _ in range(17))
+        monkeypatch.setattr(streamer_module, "validate_symbols", lambda symbol: True)
+        monkeypatch.setattr(streamer, "_add_symbol_to_sessions", lambda *args, **kwargs: None)
+        monkeypatch.setattr(streamer, "get_data", lambda: packets)
+
+        with pytest.raises(Exception, match="No 'OHLC' packet"):
+            streamer.stream(exchange="BINANCE", symbol="BTCUSDT", numb_price_candles=1)
+
+    def test_add_indicators_skips_missing_metadata(self, monkeypatch):
+        streamer = self._streamer()
+        monkeypatch.setattr(streamer_module, "fetch_indicator_metadata", lambda **kwargs: None)
+
+        streamer._add_indicators([("STD;RSI", "37.0")])
+
+        assert streamer.study_id_to_name_map == {}
+
+    def test_serialize_ohlc_handles_missing_volume(self):
+        streamer = self._streamer()
+        raw_data = {
+            "p": [
+                {},
+                {"sds_1": {"s": [{"i": 1, "v": [1710000000, 1.0, 2.0, 0.5, 1.5]}]}},
+            ]
+        }
+
+        assert streamer._serialize_ohlc(raw_data) == [
+            {"index": 1, "timestamp": 1710000000, "open": 1.0, "high": 2.0, "low": 0.5, "close": 1.5}
+        ]
+
+@LIVE_STREAMER_TEST
 class TestStreamerOHLC:
     """Test OHLC data streaming without indicators"""
     
@@ -52,6 +107,7 @@ class TestStreamerOHLC:
         time.sleep(10)
 
 
+@LIVE_STREAMER_TEST
 class TestStreamerSingleIndicator:
     """Test streaming with a single indicator"""
     
@@ -84,6 +140,7 @@ class TestStreamerSingleIndicator:
         time.sleep(10)
 
 
+@LIVE_STREAMER_TEST
 class TestStreamerMultipleIndicators:
     """Test streaming with multiple indicators"""
     
@@ -153,6 +210,7 @@ class TestStreamerMultipleIndicators:
         time.sleep(10)
 
 
+@LIVE_STREAMER_TEST
 class TestStreamerDataStructure:
     """Test data structure and content validation"""
     

@@ -1,5 +1,6 @@
 """Module providing a function to scrape fundamental financial graphs data from TradingView."""
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import List, Optional, Dict
 
 import requests
@@ -379,7 +380,8 @@ class FundamentalGraphs:
     def compare_fundamentals(
         self,
         symbols: List[str],
-        fields: Optional[List[str]] = None
+        fields: Optional[List[str]] = None,
+        max_workers: int = 4
     ) -> Dict:
         """
         Compare fundamental data across multiple symbols.
@@ -414,9 +416,15 @@ class FundamentalGraphs:
             all_data = []
             comparison = {}
 
-            # Get data for each symbol
-            for symbol in symbols:
-                result = self.get_fundamentals(symbol=symbol, fields=fields)
+            worker_count = max(1, min(max_workers, len(symbols)))
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                results = list(executor.map(
+                    lambda item: self.get_fundamentals(symbol=item, fields=fields),
+                    symbols
+                ))
+
+            # Keep output order aligned with input symbols.
+            for symbol, result in zip(symbols, results):
                 if result['status'] == 'success':
                     all_data.append(result['data'])
 

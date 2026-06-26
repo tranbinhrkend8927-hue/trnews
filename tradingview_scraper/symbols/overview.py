@@ -9,6 +9,7 @@ from tradingview_scraper.symbols.utils import (
     save_json_file,
     generate_user_agent,
 )
+from tradingview_scraper.symbols.http_client import TradingViewHttpClient
 
 
 class Overview:
@@ -140,7 +141,7 @@ class Overview:
         TECHNICAL_FIELDS
     )
 
-    def __init__(self, export_result: bool = False, export_type: str = 'json'):
+    def __init__(self, export_result: bool = False, export_type: str = 'json', http_client=None):
         """
         Initialize the Overview scraper.
 
@@ -151,6 +152,7 @@ class Overview:
         self.export_result = export_result
         self.export_type = export_type
         self.headers = {"User-Agent": generate_user_agent()}
+        self.http_client = http_client or TradingViewHttpClient(timeout=10)
 
     def _validate_symbol(self, symbol: str) -> str:
         """
@@ -222,7 +224,7 @@ class Overview:
             }
 
             # Make request
-            response = requests.get(
+            response = self.http_client.get(
                 self.SYMBOL_API_URL,
                 params=params,
                 headers=self.headers,

@@ -77,7 +77,7 @@ class TestMarkets:
 
         assert payload['range'] == [0, 100]
 
-    @mock.patch('tradingview_scraper.symbols.markets.requests.post')
+    @mock.patch('tradingview_scraper.symbols.markets.TradingViewHttpClient.post')
     def test_get_top_stocks_success(self, mock_post, markets):
         """Test successful retrieval of top stocks."""
         # Mock response
@@ -111,7 +111,7 @@ class TestMarkets:
         assert len(result['data']) == 2
         assert result['data'][0]['symbol'] == 'NASDAQ:AAPL'
 
-    @mock.patch('tradingview_scraper.symbols.markets.requests.post')
+    @mock.patch('tradingview_scraper.symbols.markets.TradingViewHttpClient.post')
     def test_get_top_stocks_no_data(self, mock_post, markets):
         """Test getting top stocks with no data."""
         # Mock response with no data
@@ -131,7 +131,7 @@ class TestMarkets:
         assert result['status'] == 'failed'
         assert 'error' in result
 
-    @mock.patch('tradingview_scraper.symbols.markets.requests.post')
+    @mock.patch('tradingview_scraper.symbols.markets.TradingViewHttpClient.post')
     def test_get_top_stocks_http_error(self, mock_post, markets):
         """Test getting top stocks with HTTP error."""
         # Mock error response
@@ -148,7 +148,7 @@ class TestMarkets:
         assert result['status'] == 'failed'
         assert 'error' in result
 
-    @mock.patch('tradingview_scraper.symbols.markets.requests.post')
+    @mock.patch('tradingview_scraper.symbols.markets.TradingViewHttpClient.post')
     def test_get_top_stocks_request_exception(self, mock_post, markets):
         """Test getting top stocks with request exception."""
         # Mock exception

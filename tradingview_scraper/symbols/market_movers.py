@@ -5,10 +5,10 @@ from typing import List, Optional, Dict
 import requests
 
 from tradingview_scraper.symbols.utils import (
-    save_csv_file,
-    save_json_file,
+    Exporter,
     generate_user_agent,
 )
+from tradingview_scraper.symbols.scanner import ScannerResponseMapper
 
 
 class MarketMovers:
@@ -80,6 +80,7 @@ class MarketMovers:
         self.export_result = export_result
         self.export_type = export_type
         self.headers = {"User-Agent": generate_user_agent()}
+        self.exporter = Exporter(export_type)
 
     def _validate_market(self, market: str) -> None:
         """
@@ -345,23 +346,8 @@ class MarketMovers:
                 # Extract data from response
                 data = json_response.get('data', [])
 
-                # Format the data
-                formatted_data = []
-                for item in data:
-                    symbol_data = item.get('d', [])
-                    if len(symbol_data) > 0:
-                        # Map data to field names
-                        formatted_item = {
-                            'symbol': item.get('s', ''),
-                        }
-
-                        # Map each field value
-                        field_list = fields if fields else self.DEFAULT_FIELDS
-                        for idx, field in enumerate(field_list):
-                            if idx < len(symbol_data):
-                                formatted_item[field] = symbol_data[idx]
-
-                        formatted_data.append(formatted_item)
+                field_list = fields if fields else self.DEFAULT_FIELDS
+                formatted_data = ScannerResponseMapper.map_rows(data, field_list)
 
                 # Export if requested
                 if self.export_result:
@@ -407,7 +393,4 @@ class MarketMovers:
             symbol (str, optional): Symbol identifier for the filename.
             data_category (str, optional): Data category for the filename.
         """
-        if self.export_type == 'json':
-            save_json_file(data=data, symbol=symbol, data_category=data_category)
-        elif self.export_type == 'csv':
-            save_csv_file(data=data, symbol=symbol, data_category=data_category)
+        self.exporter.export(data=data, symbol=symbol, data_category=data_category)

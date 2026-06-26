@@ -2,7 +2,7 @@
 
 import os
 import sys
-import time
+import json
 import pytest
 
 path = str(os.getcwd())
@@ -18,20 +18,19 @@ class TestIndicators:
         """Setup method to create an Indicators instance."""
         self.indicators_scraper = Indicators(export_result=True, export_type='json')
 
+    @staticmethod
+    def _mock_response(mocker, status_code=200, json_data=None):
+        """Helper to mock requests.get with given JSON data."""
+        mock_resp = mocker.Mock()
+        mock_resp.status_code = status_code
+        mock_resp.json.return_value = json_data or {}
+        mocker.patch('tradingview_scraper.symbols.technicals.requests.get', return_value=mock_resp)
+
     def test_scrape_indicators_success(self, mocker):
         """Test scraping indicators successfully."""
-        # Mocking the response of the scrape method with the new structure
-        mock_response = {
-            'status': 'success',
-            'data': {
-                'RSI': 50.0,
-                'Stoch.K': 80.0
-            }
-        }
-        mocker.patch.object(self.indicators_scraper, 'scrape', return_value=mock_response)
+        mock_json = {"RSI|1d": 50.0, "Stoch.K|1d": 80.0}
+        self._mock_response(mocker, json_data=mock_json)
 
-        # Scrape indicators for the BTCUSD symbol
-        time.sleep(3)
         indicators = self.indicators_scraper.scrape(
             exchange="BINANCE",
             symbol="BTCUSD",
@@ -39,22 +38,16 @@ class TestIndicators:
             indicators=["RSI", "Stoch.K"]
         )
 
-        # Update assertions to match the new mock_response structure
-        assert indicators == mock_response
         assert indicators['status'] == 'success'
         assert 'data' in indicators
-        assert 'RSI' in indicators['data']
-        assert 'Stoch.K' in indicators['data']
         assert indicators['data']['RSI'] == 50.0
         assert indicators['data']['Stoch.K'] == 80.0
+        # Verify timeframe suffix is stripped from keys
+        assert 'Stoch.K|1d' not in indicators['data']
 
     def test_scrape_indicators_invalid_exchange(self, mocker):
         """Test scraping indicators with an invalid exchange."""
-        # Mocking the response for an invalid exchange
-        mocker.patch.object(self.indicators_scraper, 'scrape', side_effect=ValueError("Invalid exchange"))
-
-        time.sleep(3)
-        with pytest.raises(ValueError, match="Invalid exchange"):
+        with pytest.raises(ValueError, match="exchange is not supported"):
             self.indicators_scraper.scrape(
                 exchange="INVALID_EXCHANGE",
                 symbol="BTCUSD",
@@ -64,10 +57,8 @@ class TestIndicators:
 
     def test_scrape_indicators_empty_response(self, mocker):
         """Test scraping indicators returns empty response."""
-        # Mocking an empty response
-        mocker.patch.object(self.indicators_scraper, 'scrape', return_value={})
+        self._mock_response(mocker, json_data={})
 
-        time.sleep(3)
         indicators = self.indicators_scraper.scrape(
             exchange="BINANCE",
             symbol="BTCUSD",
@@ -75,22 +66,13 @@ class TestIndicators:
             indicators=["RSI", "Stoch.K"]
         )
 
-        assert indicators == {}
+        assert indicators['status'] == 'failed'
 
     def test_scrape_indicators_valid_response(self, mocker):
         """Test scraping indicators with a valid success response."""
-        # Mocking the valid response of the scrape method
-        valid_response = {
-            'status': 'success',
-            'data': {
-                'RSI': 50.0,
-                'Stoch.K': 80.0
-            }
-        }
-        mocker.patch.object(self.indicators_scraper, 'scrape', return_value=valid_response)
+        mock_json = {"RSI|1d": 50.0, "Stoch.K|1d": 80.0}
+        self._mock_response(mocker, json_data=mock_json)
 
-        # Scrape indicators for the BTCUSD symbol
-        time.sleep(3)
         indicators = self.indicators_scraper.scrape(
             exchange="BINANCE",
             symbol="BTCUSD",
@@ -98,10 +80,6 @@ class TestIndicators:
             indicators=["RSI", "Stoch.K"]
         )
 
-        # Print the indicators output
-        print("Indicators Output:", indicators)
-
-        # Assertions to verify the valid response structure
         assert indicators['status'] == 'success'
         assert 'data' in indicators
         assert 'RSI' in indicators['data']

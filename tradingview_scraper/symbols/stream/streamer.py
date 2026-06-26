@@ -27,10 +27,6 @@ from tradingview_scraper.symbols.stream.utils import (
 from tradingview_scraper.symbols.utils import save_json_file, save_csv_file
 from tradingview_scraper.symbols.exceptions import DataNotFoundError
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
-
 
 class Streamer:
     """
@@ -374,11 +370,9 @@ class Streamer:
         try:
             while True:
                 try:
-                    sleep(1)
                     result = self.stream_obj.ws.recv()
                     # Check if the result is a heartbeat or actual data
                     if re.match(r"~m~\d+~m~~h~\d+$", result):
-                        self.stream_obj.ws.recv()  # Echo back the message
                         logging.debug("Received heartbeat: %s", result)
                         self.stream_obj.ws.send(result)
                     else:
@@ -408,7 +402,3 @@ def signal_handler(sig, frame):
     """
     logging.info("Keyboard interrupt received. Closing WebSocket connection.")
     sys.exit()
-
-
-# Register the signal handler
-signal.signal(signal.SIGINT, signal_handler)
