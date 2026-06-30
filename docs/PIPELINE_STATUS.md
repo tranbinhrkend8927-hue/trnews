@@ -1,8 +1,9 @@
 # Pipeline Status
 
-This document records the current checkpoint status after P13. It is a readiness
-summary for manual smoke testing and future checkpoint commits. It does not
-enable Notion export, CMS export, publishing, or automatic approval.
+This document records the current checkpoint status through P15. It is a
+readiness summary for manual smoke testing, approved-only Notion export, and
+future checkpoint commits. It does not enable CMS export, publishing, or
+automatic approval.
 
 ## Stage Overview
 
@@ -23,6 +24,9 @@ enable Notion export, CMS export, publishing, or automatic approval.
 - P12: Explicit editor-selected candidate save as `pending_review`.
 - P13: End-to-end smoke runner for topic, selected save, review report, and
   review decision dry-run.
+- P14A/P14B: Smoke documentation and checkpoint commit planning.
+- P15: Notion export for approved articles only, with `article_exports` history
+  records.
 
 ## Main Pipeline
 
@@ -37,6 +41,8 @@ forex_news
 -> article_sources
 -> review report
 -> human review approved/rejected/needs_changes
+-> approved-only Notion export
+-> article_exports
 ```
 
 ## Current CLI Entry Points
@@ -49,6 +55,7 @@ forex_news
 - `save_selected_article_draft.py`
 - `review_article.py`
 - `smoke_article_pipeline.py`
+- `export_article_to_notion.py`
 
 ## Current Test Commands
 
@@ -70,11 +77,23 @@ Run live LLM tests manually:
 RUN_LLM_LIVE=1 .venv/bin/python -m pytest -m live_llm
 ```
 
+Confirm live Notion tests are skipped by default:
+
+```bash
+.venv/bin/python -m pytest -m live_notion
+```
+
+Run live Notion tests manually only when configured:
+
+```bash
+RUN_NOTION_LIVE=1 .venv/bin/python -m pytest -m live_notion
+```
+
 ## Current Automation Boundaries
 
 - No automatic publish.
 - No automatic approve.
-- No Notion export yet.
+- Notion export is available only for `generated_articles.status = approved`.
 - No CMS export yet.
 - No unreviewed article publishing.
 - No default real OpenRouter calls.
@@ -82,6 +101,35 @@ RUN_LLM_LIVE=1 .venv/bin/python -m pytest -m live_llm
 - No save path should set `status = published`.
 - P12 save paths can only create selected drafts as `pending_review`.
 - P8 human review is required before an article can become `approved`.
+- P15 Notion export does not modify `generated_articles.status` and does not
+  mark articles as `published`.
+- `pending_review`, `draft`, `rejected`, and `published` articles are not
+  exportable in P15.
+
+## Notion Export
+
+Dry-run an approved article export without calling Notion or writing
+`article_exports`:
+
+```bash
+python export_article_to_notion.py --article-id 1 --dry-run
+```
+
+Export an approved article to Notion and write an `article_exports` record:
+
+```bash
+python export_article_to_notion.py --article-id 1 --export
+```
+
+Required environment for real export:
+
+- `NOTION_API_KEY`
+- `NOTION_DATA_SOURCE_ID` or `NOTION_PARENT_PAGE_ID`
+
+The exporter stores sanitized request, response, and error summaries in
+`article_exports`. It must not store API keys, Authorization headers, or full
+raw Notion responses. Notion is an outbound export target, not the primary
+database.
 
 ## Checkpoint Commit Grouping Suggestion
 
@@ -97,8 +145,6 @@ future checkpoint plan.
 
 ## Next Step Suggestions
 
-- P14B: Create an explicit checkpoint commit plan and review the dirty worktree
-  before staging.
-- P15: Add Notion export for approved articles only.
-- P16: Add `article_exports` table or exporter tracking so outbound exports are
-  auditable and idempotent.
+- P16: Add idempotency/re-export policy for `article_exports` if repeated
+  exports need explicit handling.
+- P17: Add CMS export only after approved-only export tracking is stable.

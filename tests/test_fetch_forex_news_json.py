@@ -211,6 +211,16 @@ def test_postgres_schema_file_defines_unified_news_tables_and_unique_indexes():
     assert "create index if not exists idx_article_reviews_article_id" in normalized
     assert "create index if not exists idx_article_reviews_decision" in normalized
     assert "create index if not exists idx_article_reviews_created_at" in normalized
+    assert "create table if not exists article_exports" in normalized
+    assert "article_exports_target_check" in normalized
+    assert "target in ('notion')" in normalized
+    assert "article_exports_status_check" in normalized
+    assert "status in ('dry_run', 'exported', 'failed', 'skipped')" in normalized
+    assert "article_id bigint not null references generated_articles(id) on delete cascade" in normalized
+    assert "create index if not exists idx_article_exports_article_id" in normalized
+    assert "create index if not exists idx_article_exports_target" in normalized
+    assert "create index if not exists idx_article_exports_status" in normalized
+    assert "create index if not exists idx_article_exports_exported_at" in normalized
 
 
 def test_init_postgres_schema_executes_schema_file(monkeypatch):

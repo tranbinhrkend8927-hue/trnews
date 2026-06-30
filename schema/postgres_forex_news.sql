@@ -152,3 +152,33 @@ ON article_reviews(decision);
 
 CREATE INDEX IF NOT EXISTS idx_article_reviews_created_at
 ON article_reviews(created_at);
+
+CREATE TABLE IF NOT EXISTS article_exports (
+    id BIGSERIAL PRIMARY KEY,
+    article_id BIGINT NOT NULL REFERENCES generated_articles(id) ON DELETE CASCADE,
+    target TEXT NOT NULL,
+    target_id TEXT,
+    target_url TEXT,
+    status TEXT NOT NULL,
+    request_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    response_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    error_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    exported_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT article_exports_target_check
+        CHECK (target IN ('notion')),
+    CONSTRAINT article_exports_status_check
+        CHECK (status IN ('dry_run', 'exported', 'failed', 'skipped'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_article_exports_article_id
+ON article_exports(article_id);
+
+CREATE INDEX IF NOT EXISTS idx_article_exports_target
+ON article_exports(target);
+
+CREATE INDEX IF NOT EXISTS idx_article_exports_status
+ON article_exports(status);
+
+CREATE INDEX IF NOT EXISTS idx_article_exports_exported_at
+ON article_exports(exported_at);

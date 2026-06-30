@@ -1,8 +1,8 @@
 # Smoke Test Guide
 
 This document describes the current manual smoke flow for the forex news article
-pipeline. It is a validation checklist only. It does not add Notion export, CMS
-export, publishing, or automatic approval.
+pipeline. It includes the approved-only Notion export check added in P15. It
+does not add CMS export, publishing, or automatic approval.
 
 ## Prerequisites
 
@@ -11,6 +11,9 @@ export, publishing, or automatic approval.
 - `forex_news` contains stored source news rows.
 - `content_topics` contains at least one generated topic.
 - OpenRouter is optional and is not used by default.
+- Notion export is optional and is not used by the smoke runner.
+- For real Notion export, `NOTION_API_KEY` plus `NOTION_DATA_SOURCE_ID` or
+  `NOTION_PARENT_PAGE_ID` must be configured.
 
 Default LLM provider behavior:
 
@@ -29,6 +32,7 @@ fetch news
 -> review report
 -> review decision dry-run
 -> manual review save-db via review_article.py
+-> optional approved-only Notion export
 ```
 
 ## Example Commands
@@ -78,6 +82,19 @@ real, use the P8 review CLI explicitly:
 python review_article.py --article-id 1 --decision approved --reviewer editor --notes "Reviewed sources" --save-db
 ```
 
+Dry-run an approved-only Notion export. This does not call Notion and does not
+write `article_exports`:
+
+```bash
+python export_article_to_notion.py --article-id 1 --dry-run
+```
+
+Export an already approved article to Notion and record the export history:
+
+```bash
+python export_article_to_notion.py --article-id 1 --export
+```
+
 ## LLM Dry-Run Examples
 
 Mock provider, no real LLM call:
@@ -103,7 +120,9 @@ fixtures.
 - `--save-selected-draft` never writes `article_reviews`.
 - Review decision smoke is dry-run only.
 - Real review writes are handled by `review_article.py --save-db`.
-- There is no current Notion export.
+- Notion export is handled only by `export_article_to_notion.py`.
+- `export_article_to_notion.py --export` writes `article_exports` only.
+- Notion export never updates `generated_articles.status`.
 - There is no current publish command.
 - There is no current CMS export.
 
@@ -111,9 +130,16 @@ fixtures.
 
 - A saved selected draft must have `status = pending_review`.
 - `approved` can only be produced by the P8 human review workflow.
+- Only `status = approved` articles can be exported to Notion.
+- `pending_review`, `draft`, `rejected`, and `published` articles cannot be
+  exported by P15.
 - There is no automatic path to `published`.
 - `needs_sources`, safety failed, or quality blocked content cannot be saved or
   approved.
+- Notion export does not publish and does not change article status.
+- Notion is an export target only, not the source of truth.
+- Notion API keys must stay in environment variables and must not be written to
+  code, logs, database JSON, or CLI output.
 - LLM output must pass through safety validation, draft quality checks, and
   comparison or selected-candidate validation.
 - LLM source references do not replace the real `source_bundle`.
@@ -138,4 +164,16 @@ Run live LLM tests manually:
 
 ```bash
 RUN_LLM_LIVE=1 .venv/bin/python -m pytest -m live_llm
+```
+
+Confirm live Notion tests are skipped by default:
+
+```bash
+.venv/bin/python -m pytest -m live_notion
+```
+
+Run live Notion tests manually only when configured:
+
+```bash
+RUN_NOTION_LIVE=1 .venv/bin/python -m pytest -m live_notion
 ```
