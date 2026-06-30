@@ -12,6 +12,41 @@ if path not in sys.path:
 from tradingview_scraper.symbols.minds import Minds
 
 
+def mock_minds_response(next_url='/api/v1/minds/?c=test&symbol=NASDAQ:AAPL'):
+    mock_response = mock.Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        'results': [
+            {
+                'text': 'Test discussion about AAPL',
+                'symbols': {'AAPL': 'NASDAQ:AAPL'},
+                'uid': 'test123',
+                'url': 'https://www.tradingview.com/minds/test',
+                'author': {
+                    'username': 'testuser',
+                    'uri': '/u/testuser/',
+                    'is_broker': False
+                },
+                'created': '2025-01-07T12:00:00+00:00',
+                'total_likes': 10,
+                'total_comments': 5,
+                'modified': False,
+                'hidden': False
+            }
+        ],
+        'next': next_url,
+        'meta': {
+            'symbols_info': {
+                'NASDAQ:AAPL': {
+                    'short_name': 'AAPL',
+                    'exchange': 'NASDAQ'
+                }
+            }
+        }
+    }
+    return mock_response
+
+
 class TestMinds:
     @pytest.fixture
     def minds(self):
@@ -150,6 +185,7 @@ class TestMinds:
         assert result['status'] == 'failed'
         assert 'error' in result
 
+    @pytest.mark.live_network
     def test_get_minds_real_aapl_recent(self, minds):
         """Test getting real minds for AAPL with recent sort."""
         time.sleep(3)
@@ -174,6 +210,7 @@ class TestMinds:
             assert 'total_likes' in first
             assert 'total_comments' in first
 
+    @pytest.mark.live_network
     def test_get_minds_real_aapl_popular(self, minds):
         """Test getting real minds for AAPL with popular sort."""
         time.sleep(3)
@@ -188,6 +225,7 @@ class TestMinds:
         assert result['status'] == 'success'
         assert 'data' in result
 
+    @pytest.mark.live_network
     def test_get_minds_real_btcusd(self, minds):
         """Test getting real minds for BTCUSD."""
         time.sleep(3)
@@ -202,8 +240,10 @@ class TestMinds:
         assert result['status'] == 'success'
         assert 'data' in result
 
-    def test_get_minds_with_symbol_info(self, minds):
+    @mock.patch('tradingview_scraper.symbols.minds.requests.get')
+    def test_get_minds_with_symbol_info(self, mock_get, minds):
         """Test that symbol info is included in response."""
+        mock_get.return_value = mock_minds_response()
         time.sleep(3)
         result = minds.get_minds(
             symbol='NASDAQ:AAPL',
@@ -216,8 +256,10 @@ class TestMinds:
         assert result['status'] == 'success'
         assert 'symbol_info' in result
 
-    def test_get_minds_pagination(self, minds):
+    @mock.patch('tradingview_scraper.symbols.minds.requests.get')
+    def test_get_minds_pagination(self, mock_get, minds):
         """Test that pagination cursor is returned."""
+        mock_get.return_value = mock_minds_response()
         time.sleep(3)
         result = minds.get_minds(
             symbol='NASDAQ:AAPL',

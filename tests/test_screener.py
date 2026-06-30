@@ -12,6 +12,39 @@ if path not in sys.path:
 from tradingview_scraper.symbols.screener import Screener
 
 
+def mock_screener_response(columns=None):
+    columns = columns or [
+        'name',
+        'close',
+        'change',
+        'change_abs',
+        'volume',
+        'Recommend.All',
+        'market_cap_basic',
+        'price_earnings_ttm',
+        'earnings_per_share_basic_ttm',
+    ]
+    row_values = {
+        'name': 'Apple Inc.',
+        'close': 150.25,
+        'change': 2.5,
+        'change_abs': 3.75,
+        'volume': 50000000,
+        'Recommend.All': 0.8,
+        'market_cap_basic': 2500000000000,
+        'price_earnings_ttm': 25.5,
+        'earnings_per_share_basic_ttm': 6.0,
+    }
+
+    mock_response = mock.Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        'data': [{'s': 'NASDAQ:AAPL', 'd': [row_values[column] for column in columns]}],
+        'totalCount': 1,
+    }
+    return mock_response
+
+
 class TestScreener:
     @pytest.fixture
     def screener(self):
@@ -180,6 +213,7 @@ class TestScreener:
         assert result['status'] == 'failed'
         assert 'error' in result
 
+    @pytest.mark.live_network
     def test_screen_real_america(self, screener):
         """Test screening real US stocks."""
         time.sleep(3)
@@ -201,6 +235,7 @@ class TestScreener:
         assert 'data' in result
         assert len(result['data']) >= 1
 
+    @pytest.mark.live_network
     def test_screen_real_crypto(self, screener):
         """Test screening real crypto."""
         time.sleep(3)
@@ -216,6 +251,7 @@ class TestScreener:
         assert 'data' in result
         assert len(result['data']) >= 1
 
+    @pytest.mark.live_network
     def test_screen_real_forex(self, screener):
         """Test screening real forex pairs."""
         time.sleep(3)
@@ -229,10 +265,12 @@ class TestScreener:
         assert result['status'] == 'success'
         assert 'data' in result
 
-    def test_screen_with_custom_columns(self, screener):
+    @mock.patch('tradingview_scraper.symbols.screener.TradingViewHttpClient.post')
+    def test_screen_with_custom_columns(self, mock_post, screener):
         """Test screening with custom columns."""
         time.sleep(3)
         custom_columns = ['name', 'close', 'volume']
+        mock_post.return_value = mock_screener_response(columns=custom_columns)
         result = screener.screen(
             market='america',
             columns=custom_columns,
@@ -247,8 +285,10 @@ class TestScreener:
             assert 'close' in result['data'][0]
             assert 'volume' in result['data'][0]
 
-    def test_screen_with_range_filter(self, screener):
+    @mock.patch('tradingview_scraper.symbols.screener.TradingViewHttpClient.post')
+    def test_screen_with_range_filter(self, mock_post, screener):
         """Test screening with range filter."""
+        mock_post.return_value = mock_screener_response()
         time.sleep(3)
         filters = [
             {'left': 'close', 'operation': 'in_range', 'right': [50, 200]}

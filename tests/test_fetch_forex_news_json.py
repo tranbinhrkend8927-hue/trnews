@@ -83,7 +83,40 @@ def test_usdidr_config_has_expected_url(monkeypatch):
 
     sources = forex_news.load_forex_news_sources()
 
-    assert sources["USDIDR"]["url"] == "https://id.tradingview.com/symbols/USDIDR/news/"
+    assert sources["USDIDR"] == {
+        "url": "https://id.tradingview.com/symbols/USDIDR/news/",
+        "base_currency": "USD",
+        "quote_currency": "IDR",
+        "locale": "id",
+        "language": "id",
+        "exchange": "FX_IDC",
+        "enabled": True,
+    }
+
+
+def test_source_config_override_supports_future_symbols(monkeypatch):
+    monkeypatch.setenv(
+        "FOREX_NEWS_SOURCES_JSON",
+        json.dumps(
+            {
+                "usdidr": _source("USDIDR"),
+                "eurusd": {
+                    "url": "https://www.tradingview.com/symbols/EURUSD/news/",
+                    "base_currency": "EUR",
+                    "quote_currency": "USD",
+                    "locale": "www",
+                    "language": "en",
+                    "exchange": "FX_IDC",
+                    "enabled": True,
+                },
+            }
+        ),
+    )
+
+    sources = forex_news.load_forex_news_sources()
+
+    assert list(sources) == ["USDIDR", "EURUSD"]
+    assert sources["EURUSD"]["base_currency"] == "EUR"
 
 
 def test_unknown_symbol_returns_clear_error():
@@ -146,6 +179,117 @@ def test_split_postgres_dsn_uses_maintenance_database(monkeypatch):
 
     assert maintenance_dsn == "postgresql://user:pass@localhost:5432/postgres"
     assert database == "tradingview_news"
+
+
+def test_postgres_schema_file_defines_unified_news_tables_and_unique_indexes():
+    schema_sql = forex_news.load_postgres_schema_sql()
+    normalized = " ".join(schema_sql.lower().split())
+
+    assert "create table if not exists forex_symbols" in normalized
+    assert "create table if not exists forex_news" in normalized
+    assert "create table if not exists content_topics" in normalized
+    assert "create table if not exists generated_articles" in normalized
+    assert "create table if not exists article_sources" in normalized
+    assert "create table if not exists article_reviews" in normalized
+    assert "create table if not exists usdidr" not in normalized
+    assert "create unique index if not exists forex_news_symbol_canonical_url_uidx" in normalized
+    assert "on forex_news(symbol, canonical_url)" in normalized
+    assert "create unique index if not exists forex_news_symbol_content_hash_uidx" in normalized
+    assert "on forex_news(symbol, content_hash)" in normalized
+    assert "create unique index if not exists content_topics_symbol_topic_hash_uidx" in normalized
+    assert "on content_topics(symbol, topic_hash)" in normalized
+    assert "daily_usdidr_update" in normalized
+    assert "bank_indonesia_watch" in normalized
+    assert "generated_articles_status_check" in normalized
+    assert "generated_articles_fact_check_status_check" in normalized
+    assert "foreign key (topic_id) references content_topics(id) on delete restrict" in normalized
+    assert "foreign key (article_id) references generated_articles(id) on delete cascade" in normalized
+    assert "create unique index if not exists generated_articles_topic_id_uidx" in normalized
+    assert "article_reviews_decision_check" in normalized
+    assert "decision in ('approved', 'rejected', 'needs_changes')" in normalized
+    assert "article_id bigint not null references generated_articles(id) on delete cascade" in normalized
+    assert "create index if not exists idx_article_reviews_article_id" in normalized
+    assert "create index if not exists idx_article_reviews_decision" in normalized
+    assert "create index if not exists idx_article_reviews_created_at" in normalized
+
+
+def test_init_postgres_schema_executes_schema_file(monkeypatch):
+    executed = []
+
+    class FakeSQL:
+        def __init__(self, value):
+            self.value = value
+
+        def format(self, identifier):
+            return f"{self.value} {identifier.value}"
+
+    class FakeIdentifier:
+        def __init__(self, value):
+            self.value = value
+
+    class FakeSqlModule:
+        SQL = FakeSQL
+        Identifier = FakeIdentifier
+
+    class FakeCursor:
+        def __init__(self, maintenance=False):
+            self.maintenance = maintenance
+            self.next_fetchone = None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def execute(self, query, params=None):
+            executed.append(str(query))
+            if self.maintenance and "SELECT 1 FROM pg_database" in str(query):
+                self.next_fetchone = None
+
+        def fetchone(self):
+            return self.next_fetchone
+
+    class FakeConnection:
+        def __init__(self, maintenance=False):
+            self.maintenance = maintenance
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def cursor(self):
+            return FakeCursor(maintenance=self.maintenance)
+
+        def commit(self):
+            executed.append("COMMIT")
+
+    def fake_connect(dsn, autocommit=False):
+        return FakeConnection(maintenance=autocommit)
+
+    psycopg_module = types.ModuleType("psycopg")
+    psycopg_module.connect = fake_connect
+    psycopg_module.sql = FakeSqlModule
+    monkeypatch.setitem(sys.modules, "psycopg", psycopg_module)
+    monkeypatch.setattr(
+        forex_news,
+        "load_postgres_schema_sql",
+        lambda: "CREATE TABLE IF NOT EXISTS forex_symbols (id BIGSERIAL);"
+        "CREATE UNIQUE INDEX IF NOT EXISTS forex_news_symbol_content_hash_uidx ON forex_news(symbol, content_hash);",
+    )
+
+    result = forex_news.init_postgres_schema("postgresql://user:pass@localhost:5432/tradingview_news")
+
+    assert result == {"success": True, "database": "tradingview_news", "created_database": True}
+    assert any("CREATE DATABASE" in query for query in executed)
+    assert "CREATE TABLE IF NOT EXISTS forex_symbols (id BIGSERIAL)" in executed
+    assert (
+        "CREATE UNIQUE INDEX IF NOT EXISTS forex_news_symbol_content_hash_uidx "
+        "ON forex_news(symbol, content_hash)"
+    ) in executed
+    assert executed[-1] == "COMMIT"
 
 
 def test_empty_news_list_returns_empty_items():
@@ -426,7 +570,7 @@ def test_dry_run_calls_database_without_writing(monkeypatch, capsys):
     assert payload["database"]["save"]["dry_run"] is True
 
 
-def test_save_db_outputs_only_database_save(monkeypatch, capsys):
+def test_save_db_outputs_batch_summary_and_database_save(monkeypatch, capsys):
     scraper = FakeScraper(
         headlines={
             "USDIDR": [
@@ -475,18 +619,26 @@ def test_save_db_outputs_only_database_save(monkeypatch, capsys):
 
     payload = json.loads(capsys.readouterr().out)
     assert exit_code == 0
-    assert payload == {
-        "database": {
-            "save": {
-                "success": True,
-                "dry_run": False,
-                "symbols_upserted": 1,
-                "inserted_count": 1,
-                "skipped_count": 0,
-                "failed_count": 0,
-                "errors": [],
-            }
-        }
+    assert payload["requested_symbols"] == ["USDIDR"]
+    assert payload["summary"] == {
+        "symbols_total": 1,
+        "symbols_success": 1,
+        "symbols_failed": 0,
+        "items_fetched": 1,
+        "items_inserted": 1,
+        "items_skipped": 0,
+        "items_failed": 0,
+    }
+    assert payload["results"][0]["items_inserted"] == 1
+    assert payload["items"][0]["title"] == "Save story"
+    assert payload["database"]["save"] == {
+        "success": True,
+        "dry_run": False,
+        "symbols_upserted": 1,
+        "inserted_count": 1,
+        "skipped_count": 0,
+        "failed_count": 0,
+        "errors": [],
     }
 
 

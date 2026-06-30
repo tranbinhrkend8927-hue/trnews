@@ -12,6 +12,36 @@ if path not in sys.path:
 from tradingview_scraper.symbols.overview import Overview
 
 
+def mock_overview_response(**overrides):
+    data = {
+        'name': 'AAPL',
+        'description': 'Apple Inc.',
+        'type': 'stock',
+        'exchange': 'NASDAQ',
+        'sector': 'Technology',
+        'industry': 'Consumer Electronics',
+        'close': 150.25,
+        'volume': 50000000,
+        'market_cap_basic': 2500000000000,
+        'market_cap_calc': 2500000000000,
+        'price_earnings_ttm': 25.5,
+        'total_revenue': 394000000000,
+        'net_income_fy': 95000000000,
+        'Perf.W': 1.1,
+        'Perf.1M': 3.2,
+        'Perf.Y': 12.5,
+        'RSI': 55.0,
+        'Recommend.All': 0.8,
+        'Volatility.D': 2.1,
+    }
+    data.update(overrides)
+
+    mock_response = mock.Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = data
+    return mock_response
+
+
 class TestOverview:
     @pytest.fixture
     def overview(self):
@@ -131,6 +161,7 @@ class TestOverview:
         assert result['status'] == 'failed'
         assert 'error' in result
 
+    @pytest.mark.live_network
     def test_get_symbol_overview_real_aapl(self, overview):
         """Test getting real overview for AAPL."""
         time.sleep(3)
@@ -148,6 +179,7 @@ class TestOverview:
         assert 'market_cap_basic' in data
         assert 'description' in data
 
+    @pytest.mark.live_network
     def test_get_symbol_overview_real_btcusd(self, overview):
         """Test getting real overview for BTCUSD."""
         time.sleep(3)
@@ -163,8 +195,10 @@ class TestOverview:
         assert 'close' in data
         assert 'volume' in data
 
-    def test_get_symbol_overview_with_custom_fields(self, overview):
+    @mock.patch('tradingview_scraper.symbols.overview.TradingViewHttpClient.get')
+    def test_get_symbol_overview_with_custom_fields(self, mock_get, overview):
         """Test getting overview with custom fields."""
+        mock_get.return_value = mock_overview_response()
         time.sleep(3)
         custom_fields = ['name', 'close', 'volume', 'market_cap_basic', 'change']
 
@@ -183,8 +217,10 @@ class TestOverview:
         assert 'close' in data
         assert 'volume' in data
 
-    def test_get_profile(self, overview):
+    @mock.patch('tradingview_scraper.symbols.overview.TradingViewHttpClient.get')
+    def test_get_profile(self, mock_get, overview):
         """Test getting profile data."""
+        mock_get.return_value = mock_overview_response()
         time.sleep(3)
         result = overview.get_profile(symbol='NASDAQ:AAPL')
 
@@ -199,8 +235,10 @@ class TestOverview:
         assert 'exchange' in data
         assert 'sector' in data
 
-    def test_get_statistics(self, overview):
+    @mock.patch('tradingview_scraper.symbols.overview.TradingViewHttpClient.get')
+    def test_get_statistics(self, mock_get, overview):
         """Test getting statistics data."""
+        mock_get.return_value = mock_overview_response()
         time.sleep(3)
         result = overview.get_statistics(symbol='NASDAQ:AAPL')
 
@@ -213,8 +251,10 @@ class TestOverview:
         assert 'market_cap_basic' in data or 'market_cap_calc' in data
         assert 'price_earnings_ttm' in data
 
-    def test_get_financials(self, overview):
+    @mock.patch('tradingview_scraper.symbols.overview.TradingViewHttpClient.get')
+    def test_get_financials(self, mock_get, overview):
         """Test getting financial data."""
+        mock_get.return_value = mock_overview_response()
         time.sleep(3)
         result = overview.get_financials(symbol='NASDAQ:AAPL')
 
@@ -226,8 +266,10 @@ class TestOverview:
         data = result['data']
         assert 'total_revenue' in data or 'net_income_fy' in data
 
-    def test_get_performance(self, overview):
+    @mock.patch('tradingview_scraper.symbols.overview.TradingViewHttpClient.get')
+    def test_get_performance(self, mock_get, overview):
         """Test getting performance data."""
+        mock_get.return_value = mock_overview_response()
         time.sleep(3)
         result = overview.get_performance(symbol='NASDAQ:AAPL')
 
@@ -241,8 +283,10 @@ class TestOverview:
         assert 'Perf.1M' in data
         assert 'Perf.Y' in data
 
-    def test_get_technicals(self, overview):
+    @mock.patch('tradingview_scraper.symbols.overview.TradingViewHttpClient.get')
+    def test_get_technicals(self, mock_get, overview):
         """Test getting technical data."""
+        mock_get.return_value = mock_overview_response()
         time.sleep(3)
         result = overview.get_technicals(symbol='NASDAQ:AAPL')
 

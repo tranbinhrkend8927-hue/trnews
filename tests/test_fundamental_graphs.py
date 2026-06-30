@@ -12,6 +12,32 @@ if path not in sys.path:
 from tradingview_scraper.symbols.fundamental_graphs import FundamentalGraphs
 
 
+def mock_fundamentals_response(**overrides):
+    data = {
+        'total_revenue': 394000000000,
+        'total_revenue_fy': 390000000000,
+        'net_income': 100000000000,
+        'net_income_fy': 95000000000,
+        'EBITDA': 130000000000,
+        'market_cap_basic': 2800000000000,
+        'market_cap_calc': 2800000000000,
+        'price_earnings_ttm': 28.5,
+        'total_assets': 350000000000,
+        'cash_f_operating_activities': 120000000000,
+        'gross_margin': 0.45,
+        'return_on_equity': 0.28,
+        'current_ratio': 1.1,
+        'debt_to_equity': 1.5,
+        'dividends_yield': 0.005,
+    }
+    data.update(overrides)
+
+    mock_response = mock.Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = data
+    return mock_response
+
+
 class TestFundamentalGraphs:
     @pytest.fixture
     def fundamentals(self):
@@ -131,6 +157,7 @@ class TestFundamentalGraphs:
         assert result['status'] == 'failed'
         assert 'error' in result
 
+    @pytest.mark.live_network
     def test_get_fundamentals_real_aapl(self, fundamentals):
         """Test getting real fundamentals for AAPL."""
         time.sleep(3)
@@ -148,6 +175,7 @@ class TestFundamentalGraphs:
         has_income = 'net_income' in data or 'net_income_fy' in data
         assert has_revenue or has_income
 
+    @pytest.mark.live_network
     def test_get_fundamentals_real_msft(self, fundamentals):
         """Test getting real fundamentals for MSFT."""
         time.sleep(3)
@@ -159,8 +187,10 @@ class TestFundamentalGraphs:
         assert 'data' in result
         assert result['data']['symbol'] == 'NASDAQ:MSFT'
 
-    def test_get_fundamentals_with_custom_fields(self, fundamentals):
+    @mock.patch('tradingview_scraper.symbols.fundamental_graphs.requests.get')
+    def test_get_fundamentals_with_custom_fields(self, mock_get, fundamentals):
         """Test getting fundamentals with custom fields."""
+        mock_get.return_value = mock_fundamentals_response()
         time.sleep(3)
         custom_fields = ['total_revenue', 'net_income', 'EBITDA', 'market_cap_basic']
 
@@ -174,8 +204,10 @@ class TestFundamentalGraphs:
         assert result['status'] == 'success'
         assert 'data' in result
 
-    def test_get_income_statement(self, fundamentals):
+    @mock.patch('tradingview_scraper.symbols.fundamental_graphs.requests.get')
+    def test_get_income_statement(self, mock_get, fundamentals):
         """Test getting income statement data."""
+        mock_get.return_value = mock_fundamentals_response()
         time.sleep(3)
         result = fundamentals.get_income_statement(symbol='NASDAQ:AAPL')
 
@@ -184,8 +216,10 @@ class TestFundamentalGraphs:
         assert result['status'] == 'success'
         assert 'data' in result
 
-    def test_get_balance_sheet(self, fundamentals):
+    @mock.patch('tradingview_scraper.symbols.fundamental_graphs.requests.get')
+    def test_get_balance_sheet(self, mock_get, fundamentals):
         """Test getting balance sheet data."""
+        mock_get.return_value = mock_fundamentals_response()
         time.sleep(3)
         result = fundamentals.get_balance_sheet(symbol='NASDAQ:AAPL')
 
@@ -194,8 +228,10 @@ class TestFundamentalGraphs:
         assert result['status'] == 'success'
         assert 'data' in result
 
-    def test_get_cash_flow(self, fundamentals):
+    @mock.patch('tradingview_scraper.symbols.fundamental_graphs.requests.get')
+    def test_get_cash_flow(self, mock_get, fundamentals):
         """Test getting cash flow data."""
+        mock_get.return_value = mock_fundamentals_response()
         time.sleep(3)
         result = fundamentals.get_cash_flow(symbol='NASDAQ:AAPL')
 
@@ -204,8 +240,10 @@ class TestFundamentalGraphs:
         assert result['status'] == 'success'
         assert 'data' in result
 
-    def test_get_margins(self, fundamentals):
+    @mock.patch('tradingview_scraper.symbols.fundamental_graphs.requests.get')
+    def test_get_margins(self, mock_get, fundamentals):
         """Test getting margin data."""
+        mock_get.return_value = mock_fundamentals_response()
         time.sleep(3)
         result = fundamentals.get_margins(symbol='NASDAQ:AAPL')
 
@@ -214,8 +252,10 @@ class TestFundamentalGraphs:
         assert result['status'] == 'success'
         assert 'data' in result
 
-    def test_get_profitability(self, fundamentals):
+    @mock.patch('tradingview_scraper.symbols.fundamental_graphs.requests.get')
+    def test_get_profitability(self, mock_get, fundamentals):
         """Test getting profitability data."""
+        mock_get.return_value = mock_fundamentals_response()
         time.sleep(3)
         result = fundamentals.get_profitability(symbol='NASDAQ:AAPL')
 
@@ -224,8 +264,10 @@ class TestFundamentalGraphs:
         assert result['status'] == 'success'
         assert 'data' in result
 
-    def test_get_liquidity(self, fundamentals):
+    @mock.patch('tradingview_scraper.symbols.fundamental_graphs.requests.get')
+    def test_get_liquidity(self, mock_get, fundamentals):
         """Test getting liquidity data."""
+        mock_get.return_value = mock_fundamentals_response()
         time.sleep(3)
         result = fundamentals.get_liquidity(symbol='NASDAQ:AAPL')
 
@@ -234,8 +276,10 @@ class TestFundamentalGraphs:
         assert result['status'] == 'success'
         assert 'data' in result
 
-    def test_get_leverage(self, fundamentals):
+    @mock.patch('tradingview_scraper.symbols.fundamental_graphs.requests.get')
+    def test_get_leverage(self, mock_get, fundamentals):
         """Test getting leverage data."""
+        mock_get.return_value = mock_fundamentals_response()
         time.sleep(3)
         result = fundamentals.get_leverage(symbol='NASDAQ:AAPL')
 
@@ -244,8 +288,10 @@ class TestFundamentalGraphs:
         assert result['status'] == 'success'
         assert 'data' in result
 
-    def test_get_valuation(self, fundamentals):
+    @mock.patch('tradingview_scraper.symbols.fundamental_graphs.requests.get')
+    def test_get_valuation(self, mock_get, fundamentals):
         """Test getting valuation data."""
+        mock_get.return_value = mock_fundamentals_response()
         time.sleep(3)
         result = fundamentals.get_valuation(symbol='NASDAQ:AAPL')
 
@@ -259,8 +305,10 @@ class TestFundamentalGraphs:
         has_market_cap = 'market_cap_basic' in data or 'market_cap_calc' in data
         assert has_market_cap
 
-    def test_get_dividends(self, fundamentals):
+    @mock.patch('tradingview_scraper.symbols.fundamental_graphs.requests.get')
+    def test_get_dividends(self, mock_get, fundamentals):
         """Test getting dividend data."""
+        mock_get.return_value = mock_fundamentals_response()
         time.sleep(3)
         result = fundamentals.get_dividends(symbol='NASDAQ:AAPL')
 
@@ -295,6 +343,7 @@ class TestFundamentalGraphs:
         assert len(result['data']) == 2
         assert 'total_revenue' in result['comparison']
 
+    @pytest.mark.live_network
     def test_compare_fundamentals_real(self, fundamentals):
         """Test comparing real fundamentals across symbols."""
         time.sleep(3)

@@ -12,6 +12,43 @@ if path not in sys.path:
 from tradingview_scraper.symbols.markets import Markets
 
 
+def mock_markets_response(columns=None):
+    columns = columns or [
+        'name',
+        'close',
+        'change',
+        'change_abs',
+        'volume',
+        'Recommend.All',
+        'market_cap_basic',
+        'price_earnings_ttm',
+        'earnings_per_share_basic_ttm',
+        'sector',
+        'industry',
+    ]
+    row_values = {
+        'name': 'AAPL',
+        'close': 150.25,
+        'change': 2.5,
+        'change_abs': 3.75,
+        'volume': 50000000,
+        'Recommend.All': 0.8,
+        'market_cap_basic': 2500000000000,
+        'price_earnings_ttm': 25.5,
+        'earnings_per_share_basic_ttm': 6.0,
+        'sector': 'Technology',
+        'industry': 'Consumer Electronics',
+    }
+
+    mock_response = mock.Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        'data': [{'s': 'NASDAQ:AAPL', 'd': [row_values[column] for column in columns]}],
+        'totalCount': 1,
+    }
+    return mock_response
+
+
 class TestMarkets:
     @pytest.fixture
     def markets(self):
@@ -162,6 +199,7 @@ class TestMarkets:
         assert result['status'] == 'failed'
         assert 'error' in result
 
+    @pytest.mark.live_network
     def test_get_top_stocks_real_america_by_market_cap(self, markets):
         """Test getting real top stocks by market cap."""
         time.sleep(3)
@@ -185,6 +223,7 @@ class TestMarkets:
             assert 'close' in first_item
             assert 'market_cap_basic' in first_item
 
+    @pytest.mark.live_network
     def test_get_top_stocks_real_america_by_volume(self, markets):
         """Test getting real top stocks by volume."""
         time.sleep(3)
@@ -200,6 +239,7 @@ class TestMarkets:
         assert 'data' in result
         assert len(result['data']) >= 1
 
+    @pytest.mark.live_network
     def test_get_top_stocks_real_crypto(self, markets):
         """Test getting real top crypto."""
         time.sleep(3)
@@ -216,10 +256,12 @@ class TestMarkets:
         assert result is not None
         assert 'status' in result
 
-    def test_get_top_stocks_with_custom_columns(self, markets):
+    @mock.patch('tradingview_scraper.symbols.markets.TradingViewHttpClient.post')
+    def test_get_top_stocks_with_custom_columns(self, mock_post, markets):
         """Test getting top stocks with custom columns."""
         time.sleep(3)
         custom_columns = ['name', 'close', 'volume', 'market_cap_basic']
+        mock_post.return_value = mock_markets_response(columns=custom_columns)
         result = markets.get_top_stocks(
             market='america',
             by='market_cap',

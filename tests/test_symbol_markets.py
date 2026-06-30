@@ -12,6 +12,41 @@ if path not in sys.path:
 from tradingview_scraper.symbols.symbol_markets import SymbolMarkets
 
 
+def mock_symbol_markets_response(columns=None):
+    columns = columns or [
+        'name',
+        'close',
+        'change',
+        'change_abs',
+        'volume',
+        'exchange',
+        'type',
+        'description',
+        'currency',
+        'market_cap_basic',
+    ]
+    row_values = {
+        'name': 'AAPL',
+        'close': 150.25,
+        'change': 2.5,
+        'change_abs': 3.75,
+        'volume': 50000000,
+        'exchange': 'NASDAQ',
+        'type': 'stock',
+        'description': 'Apple Inc.',
+        'currency': 'USD',
+        'market_cap_basic': 2500000000000,
+    }
+
+    mock_response = mock.Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        'data': [{'s': 'NASDAQ:AAPL', 'd': [row_values[column] for column in columns]}],
+        'totalCount': 1,
+    }
+    return mock_response
+
+
 class TestSymbolMarkets:
     @pytest.fixture
     def symbol_markets(self):
@@ -141,6 +176,7 @@ class TestSymbolMarkets:
         assert result['status'] == 'failed'
         assert 'Unsupported scanner' in result['error']
 
+    @pytest.mark.live_network
     def test_scrape_real_aapl_global(self, symbol_markets):
         """Test scraping real AAPL markets globally."""
         time.sleep(3)
@@ -156,6 +192,7 @@ class TestSymbolMarkets:
         symbols = [item['symbol'] for item in result['data']]
         assert 'NASDAQ:AAPL' in symbols
 
+    @pytest.mark.live_network
     def test_scrape_real_aapl_america(self, symbol_markets):
         """Test scraping real AAPL markets in America."""
         time.sleep(3)
@@ -174,6 +211,7 @@ class TestSymbolMarkets:
             assert 'name' in first_item
             assert 'exchange' in first_item
 
+    @pytest.mark.live_network
     def test_scrape_real_btcusd_crypto(self, symbol_markets):
         """Test scraping real BTCUSD markets in crypto."""
         time.sleep(3)
@@ -184,10 +222,12 @@ class TestSymbolMarkets:
         assert result['status'] == 'success'
         assert 'data' in result
 
-    def test_scrape_with_custom_columns(self, symbol_markets):
+    @mock.patch('tradingview_scraper.symbols.symbol_markets.requests.post')
+    def test_scrape_with_custom_columns(self, mock_post, symbol_markets):
         """Test scraping with custom columns."""
         time.sleep(3)
         custom_columns = ['name', 'close', 'volume', 'exchange']
+        mock_post.return_value = mock_symbol_markets_response(columns=custom_columns)
         result = symbol_markets.scrape(
             symbol='AAPL',
             columns=custom_columns,

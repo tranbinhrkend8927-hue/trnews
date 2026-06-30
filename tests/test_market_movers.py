@@ -12,6 +12,41 @@ if path not in sys.path:
 from tradingview_scraper.symbols.market_movers import MarketMovers
 
 
+def mock_market_movers_response(fields=None):
+    fields = fields or [
+        'name',
+        'close',
+        'change',
+        'change_abs',
+        'volume',
+        'market_cap_basic',
+        'price_earnings_ttm',
+        'earnings_per_share_basic_ttm',
+        'logoid',
+        'description',
+    ]
+    row_values = {
+        'name': 'Apple Inc.',
+        'close': 150.25,
+        'change': 2.5,
+        'change_abs': 3.75,
+        'volume': 50000000,
+        'market_cap_basic': 2500000000000,
+        'price_earnings_ttm': 25.5,
+        'earnings_per_share_basic_ttm': 6.0,
+        'logoid': 'logo-id',
+        'description': 'Tech company',
+    }
+
+    mock_response = mock.Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        'data': [{'s': 'NASDAQ:AAPL', 'd': [row_values[field] for field in fields]}],
+        'totalCount': 1,
+    }
+    return mock_response
+
+
 class TestMarketMovers:
     @pytest.fixture
     def market_movers_scraper(self):
@@ -164,6 +199,7 @@ class TestMarketMovers:
         assert result['status'] == 'failed'
         assert 'error' in result
 
+    @pytest.mark.live_network
     def test_scrape_real_gainers(self, market_movers_scraper):
         """Test scraping real gainers data."""
         time.sleep(3)
@@ -179,6 +215,7 @@ class TestMarketMovers:
         assert 'data' in result
         assert len(result['data']) >= 1
 
+    @pytest.mark.live_network
     def test_scrape_real_losers(self, market_movers_scraper):
         """Test scraping real losers data."""
         time.sleep(3)
@@ -194,6 +231,7 @@ class TestMarketMovers:
         assert 'data' in result
         assert len(result['data']) >= 1
 
+    @pytest.mark.live_network
     def test_scrape_real_penny_stocks(self, market_movers_scraper):
         """Test scraping real penny stocks data."""
         time.sleep(3)
@@ -208,10 +246,12 @@ class TestMarketMovers:
         assert result['status'] == 'success'
         assert 'data' in result
 
-    def test_scrape_with_custom_fields(self, market_movers_scraper):
+    @mock.patch('tradingview_scraper.symbols.market_movers.requests.post')
+    def test_scrape_with_custom_fields(self, mock_post, market_movers_scraper):
         """Test scraping with custom fields."""
         time.sleep(3)
         custom_fields = ['name', 'close', 'change', 'volume']
+        mock_post.return_value = mock_market_movers_response(fields=custom_fields)
         result = market_movers_scraper.scrape(
             market='stocks-usa',
             category='gainers',

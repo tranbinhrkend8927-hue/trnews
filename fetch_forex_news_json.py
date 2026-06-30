@@ -13,12 +13,16 @@ import json
 import os
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from urllib.parse import urlparse, urlunparse
 
 from dotenv import load_dotenv
 
 from tradingview_scraper.symbols.news import NewsScraper
+
+
+POSTGRES_SCHEMA_PATH = Path(__file__).resolve().parent / "schema" / "postgres_forex_news.sql"
 
 
 LOCALE_LANGUAGE_MAP = {
@@ -160,6 +164,14 @@ def split_postgres_dsn(dsn: str) -> Tuple[str, str]:
     return urlunparse(maintenance), database
 
 
+def load_postgres_schema_sql(path: Path = POSTGRES_SCHEMA_PATH) -> str:
+    return path.read_text(encoding="utf-8")
+
+
+def iter_postgres_schema_statements(schema_sql: str) -> List[str]:
+    return [statement.strip() for statement in schema_sql.split(";") if statement.strip()]
+
+
 def init_postgres_schema(dsn: str) -> Dict[str, Any]:
     """Create the target database and tables if they do not already exist."""
     try:
@@ -180,71 +192,8 @@ def init_postgres_schema(dsn: str) -> Dict[str, Any]:
 
     with psycopg.connect(dsn) as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS forex_symbols (
-                    id BIGSERIAL PRIMARY KEY,
-                    symbol TEXT NOT NULL UNIQUE,
-                    base_currency TEXT,
-                    quote_currency TEXT,
-                    locale TEXT,
-                    tradingview_news_url TEXT,
-                    enabled BOOLEAN NOT NULL DEFAULT TRUE,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
-                """
-            )
-            cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS forex_news (
-                    id BIGSERIAL PRIMARY KEY,
-                    symbol TEXT NOT NULL,
-                    base_currency TEXT,
-                    quote_currency TEXT,
-                    locale TEXT,
-                    title TEXT,
-                    summary TEXT,
-                    content TEXT,
-                    url TEXT,
-                    canonical_url TEXT,
-                    source TEXT,
-                    published_at TIMESTAMPTZ,
-                    fetched_at TIMESTAMPTZ,
-                    source_url TEXT,
-                    content_hash TEXT NOT NULL,
-                    raw_json JSONB,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                )
-                """
-            )
-            cur.execute(
-                """
-                ALTER TABLE forex_news
-                ADD COLUMN IF NOT EXISTS canonical_url TEXT
-                """
-            )
-            cur.execute(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS forex_news_symbol_canonical_url_uidx
-                ON forex_news(symbol, canonical_url)
-                WHERE canonical_url IS NOT NULL AND canonical_url <> ''
-                """
-            )
-            cur.execute(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS forex_news_symbol_url_uidx
-                ON forex_news(symbol, url)
-                WHERE url IS NOT NULL AND url <> ''
-                """
-            )
-            cur.execute(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS forex_news_symbol_content_hash_uidx
-                ON forex_news(symbol, content_hash)
-                """
-            )
+            for statement in iter_postgres_schema_statements(load_postgres_schema_sql()):
+                cur.execute(statement)
         conn.commit()
 
     return {"success": True, "database": database, "created_database": created_database}
@@ -794,11 +743,14 @@ def fetch_latest_forex_news_json(symbol: str = "USDIDR", exchange: str = "FX_IDC
     return fetch_forex_news_batch([(symbol.upper(), source)], limit=limit)
 
 
-def apply_database_counts(result: Dict[str, Any]) -> Dict[str, Any]:
+def apply_database_counts(result: Dict[str, Any], save_result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     per_symbol = {}
+    has_item_status = False
     for item in result.get("items", []):
         symbol = item.get("symbol")
         status = item.get("db_status")
+        if status:
+            has_item_status = True
         counts = per_symbol.setdefault(symbol, {"items_inserted": 0, "items_skipped": 0, "items_failed": 0})
         if status in ("inserted", "would_insert"):
             counts["items_inserted"] += 1
@@ -817,6 +769,15 @@ def apply_database_counts(result: Dict[str, Any]) -> Dict[str, Any]:
 
     result.setdefault("summary", {})
     result["summary"].update(totals)
+    if not has_item_status and save_result:
+        fallback_counts = {
+            "items_inserted": int(save_result.get("inserted_count", 0) or 0),
+            "items_skipped": int(save_result.get("skipped_count", 0) or 0),
+            "items_failed": int(save_result.get("failed_count", 0) or 0),
+        }
+        result["summary"].update(fallback_counts)
+        if len(result.get("results", [])) == 1:
+            result["results"][0].update(fallback_counts)
     return result
 
 
@@ -885,11 +846,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.save_db or args.dry_run:
             database_result = database_result or {}
             database_result["save"] = save_result_to_postgres(result, targets, dsn, dry_run=args.dry_run)
-            result = apply_database_counts(result)
+            result = apply_database_counts(result, database_result["save"])
         if database_result is not None:
             result["database"] = json_safe(database_result)
-        if args.save_db:
-            result = {"database": {"save": json_safe(database_result.get("save", {}))}}
     except Exception as exc:
         result = {"fetched_at": utc_now_iso(), "count": 0, "items": [], "results": [], "errors": [{"error": str(exc)}]}
 
