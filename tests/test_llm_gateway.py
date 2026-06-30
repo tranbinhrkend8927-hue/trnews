@@ -1,7 +1,7 @@
 import json
 
-from llm_gateway import LLMGateway, MockLLMProvider
-from llm_schemas import BASIC_JSON_SCHEMA, validate_json_schema
+from news_pipeline.llm_gateway import LLMGateway, MockLLMProvider
+from news_pipeline.llm_schemas import BASIC_JSON_SCHEMA, validate_json_schema
 
 
 def _messages():

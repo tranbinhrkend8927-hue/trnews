@@ -1,7 +1,7 @@
 import json
 
-import llm_article_prompts
-from language_profiles import get_language_profile
+from news_pipeline import llm_article_prompts
+from news_pipeline.language_profiles import get_language_profile
 
 
 def _topic():

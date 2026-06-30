@@ -1,6 +1,6 @@
 import json
 
-import smoke_article_pipeline
+from news_pipeline import smoke_article_pipeline
 
 
 def _topic(**overrides):

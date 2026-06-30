@@ -2,8 +2,8 @@ import json
 import sys
 import types
 
-import article_review
-import review_article
+from news_pipeline import article_review
+from news_pipeline import review_article
 
 
 def _body():

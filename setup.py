@@ -41,6 +41,9 @@ setup(
             'data/news_providers.txt',
             'data/timeframes.json',
         ],
+        'news_pipeline': [
+            'schema/postgres_forex_news.sql',
+        ],
     },
     install_requires=[
         "requests==2.32.4",

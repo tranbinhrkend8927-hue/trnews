@@ -2,8 +2,8 @@ import json
 import sys
 import types
 
-import article_drafts
-import generate_article_drafts
+from news_pipeline import article_drafts
+from news_pipeline import generate_article_drafts
 
 
 def _topic(**overrides):

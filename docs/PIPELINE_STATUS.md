@@ -48,15 +48,15 @@ forex_news
 
 ## Current CLI Entry Points
 
-- `fetch_forex_news_json.py`
-- `generate_content_topics.py`
-- `generate_article_drafts.py`
-- `generate_llm_article_draft.py`
-- `compare_article_drafts.py`
-- `save_selected_article_draft.py`
-- `review_article.py`
-- `smoke_article_pipeline.py`
-- `export_article_to_notion.py`
+- `news_pipeline/fetch_forex_news_json.py`
+- `news_pipeline/generate_content_topics.py`
+- `news_pipeline/generate_article_drafts.py`
+- `news_pipeline/generate_llm_article_draft.py`
+- `news_pipeline/compare_article_drafts.py`
+- `news_pipeline/save_selected_article_draft.py`
+- `news_pipeline/review_article.py`
+- `news_pipeline/smoke_article_pipeline.py`
+- `news_pipeline/export_article_to_notion.py`
 
 ## Current Test Commands
 
@@ -113,7 +113,7 @@ Dry-run an approved article export without calling Notion or writing
 `article_exports`:
 
 ```bash
-python export_article_to_notion.py --article-id 1 --dry-run
+python -m news_pipeline.export_article_to_notion --article-id 1 --dry-run
 ```
 
 Export an approved article to Notion and write an `article_exports` record.
@@ -121,19 +121,19 @@ The default policy is idempotent: if an exported Notion record already exists,
 the command is skipped and no new Notion page is created.
 
 ```bash
-python export_article_to_notion.py --article-id 1 --export
+python -m news_pipeline.export_article_to_notion --article-id 1 --export
 ```
 
 Retry a previous failed export explicitly:
 
 ```bash
-python export_article_to_notion.py --article-id 1 --export --retry-failed
+python -m news_pipeline.export_article_to_notion --article-id 1 --export --retry-failed
 ```
 
 Create a new Notion page even when an exported record already exists:
 
 ```bash
-python export_article_to_notion.py --article-id 1 --export --force-reexport
+python -m news_pipeline.export_article_to_notion --article-id 1 --export --force-reexport
 ```
 
 Required environment for real export:

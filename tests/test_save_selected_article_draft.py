@@ -2,8 +2,8 @@ import json
 import sys
 import types
 
-import save_selected_article_draft
-import selected_article_draft
+from news_pipeline import save_selected_article_draft
+from news_pipeline import selected_article_draft
 
 
 def _topic(**overrides):
@@ -508,6 +508,7 @@ def test_sources_json_contains_required_summary_and_no_secret_fields():
     assert "safety_summary" in sources_json
     assert "quality_summary" in sources_json
     assert sources_json["llm_metadata"]["provider"] == "mock"
+    assert "LLM_API_KEY" not in dumped
     assert "OPENROUTER_API_KEY" not in dumped
     assert "Authorization" not in dumped
     assert "raw_response" not in dumped

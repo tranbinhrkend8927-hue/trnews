@@ -3,7 +3,7 @@ import sys
 import types
 from datetime import datetime, timezone
 
-import source_grounding
+from news_pipeline import source_grounding
 
 
 def _topic(**overrides):

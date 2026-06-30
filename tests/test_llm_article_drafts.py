@@ -1,8 +1,8 @@
 import json
 
-import generate_llm_article_draft
-import llm_article_drafts
-from llm_gateway import LLMGateway, MockLLMProvider
+from news_pipeline import generate_llm_article_draft
+from news_pipeline import llm_article_drafts
+from news_pipeline.llm_gateway import LLMGateway, MockLLMProvider
 
 
 def _topic(**overrides):

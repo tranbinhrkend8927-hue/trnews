@@ -2,7 +2,7 @@ import json
 import sys
 import types
 
-import fetch_forex_news_json as forex_news
+from news_pipeline import fetch_forex_news_json as forex_news
 
 
 class FakeScraper:

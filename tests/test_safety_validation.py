@@ -1,7 +1,7 @@
 import json
 
-import article_templates
-import safety_validation
+from news_pipeline import article_templates
+from news_pipeline import safety_validation
 
 
 def _article(**overrides):

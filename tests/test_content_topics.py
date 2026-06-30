@@ -3,8 +3,8 @@ import sys
 import types
 from datetime import datetime, timezone
 
-import content_topics
-import generate_content_topics
+from news_pipeline import content_topics
+from news_pipeline import generate_content_topics
 
 
 NOW = datetime(2026, 1, 2, 0, 0, tzinfo=timezone.utc)

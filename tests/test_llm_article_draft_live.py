@@ -2,15 +2,15 @@ import os
 
 import pytest
 
-from llm_article_drafts import generate_llm_article_draft_candidate
-from llm_gateway import LLMGateway
-from llm_providers.openrouter import OpenRouterProvider
+from news_pipeline.llm_article_drafts import generate_llm_article_draft_candidate
+from news_pipeline.llm_gateway import LLMGateway
+from news_pipeline.llm_providers.openrouter import OpenRouterProvider
 
 
 @pytest.mark.live_llm
 def test_openrouter_live_llm_article_draft_candidate_dry_run_only():
-    if not os.getenv("OPENROUTER_API_KEY") or not os.getenv("OPENROUTER_DEFAULT_MODEL"):
-        pytest.skip("OPENROUTER_API_KEY and OPENROUTER_DEFAULT_MODEL are required for live LLM draft tests")
+    if not os.getenv("LLM_API_KEY") or not os.getenv("LLM_DEFAULT_MODEL"):
+        pytest.skip("LLM_API_KEY and LLM_DEFAULT_MODEL are required for live LLM draft tests")
 
     topic = {
         "id": 1,

@@ -2,15 +2,15 @@ import os
 
 import pytest
 
-from llm_gateway import LLMGateway
-from llm_providers.openrouter import OpenRouterProvider
-from llm_schemas import BASIC_JSON_SCHEMA
+from news_pipeline.llm_gateway import LLMGateway
+from news_pipeline.llm_providers.openrouter import OpenRouterProvider
+from news_pipeline.llm_schemas import BASIC_JSON_SCHEMA
 
 
 @pytest.mark.live_llm
 def test_openrouter_live_minimal_json_output():
-    if not os.getenv("OPENROUTER_API_KEY") or not os.getenv("OPENROUTER_DEFAULT_MODEL"):
-        pytest.skip("OPENROUTER_API_KEY and OPENROUTER_DEFAULT_MODEL are required for live LLM tests")
+    if not os.getenv("LLM_API_KEY") or not os.getenv("LLM_DEFAULT_MODEL"):
+        pytest.skip("LLM_API_KEY and LLM_DEFAULT_MODEL are required for live LLM tests")
 
     result = LLMGateway(provider=OpenRouterProvider()).generate_json(
         "live_minimal_json_test",

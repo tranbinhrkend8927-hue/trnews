@@ -5,9 +5,9 @@ import types
 import pytest
 import requests
 
-import export_article_to_notion as notion_cli
-import notion_config
-import notion_exporter
+from news_pipeline import export_article_to_notion as notion_cli
+from news_pipeline import notion_config
+from news_pipeline import notion_exporter
 
 
 def _body(extra_sections=0):

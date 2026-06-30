@@ -1,6 +1,6 @@
 import json
 
-import draft_quality
+from news_pipeline import draft_quality
 
 
 def _source_bundle(**overrides):

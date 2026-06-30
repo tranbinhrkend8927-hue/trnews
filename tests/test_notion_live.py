@@ -1,7 +1,7 @@
 import pytest
 
-from notion_config import load_notion_config
-from notion_exporter import export_article_to_notion
+from news_pipeline.notion_config import load_notion_config
+from news_pipeline.notion_exporter import export_article_to_notion
 
 
 @pytest.mark.live_notion

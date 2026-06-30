@@ -1,8 +1,8 @@
 import json
 
-import compare_article_drafts
-import draft_comparison
-from llm_gateway import LLMGateway, MockLLMProvider
+from news_pipeline import compare_article_drafts
+from news_pipeline import draft_comparison
+from news_pipeline.llm_gateway import LLMGateway, MockLLMProvider
 
 
 def _source_bundle(**overrides):

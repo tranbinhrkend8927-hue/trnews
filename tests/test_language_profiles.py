@@ -1,6 +1,6 @@
 import json
 
-import language_profiles
+from news_pipeline import language_profiles
 
 
 def test_indonesian_profile_success():

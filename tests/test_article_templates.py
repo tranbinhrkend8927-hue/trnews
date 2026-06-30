@@ -1,7 +1,7 @@
 import json
 import re
 
-import article_templates
+from news_pipeline import article_templates
 
 
 def _topic(**overrides):

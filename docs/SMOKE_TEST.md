@@ -31,7 +31,7 @@ fetch news
 -> save selected draft as pending_review
 -> review report
 -> review decision dry-run
--> manual review save-db via review_article.py
+-> manual review save-db via news_pipeline.review_article
 -> optional approved-only Notion export
 ```
 
@@ -40,59 +40,59 @@ fetch news
 Fetch news and save it to the database:
 
 ```bash
-python fetch_forex_news_json.py --symbol USDIDR --save-db
+python -m news_pipeline.fetch_forex_news_json --symbol USDIDR --save-db
 ```
 
 Generate content topics:
 
 ```bash
-python generate_content_topics.py --symbol USDIDR --save-db
+python -m news_pipeline.generate_content_topics --symbol USDIDR --save-db
 ```
 
 Run the selected candidate smoke flow without writing to the database:
 
 ```bash
-python smoke_article_pipeline.py --topic-id 1 --candidate template --dry-run
+python -m news_pipeline.smoke_article_pipeline --topic-id 1 --candidate template --dry-run
 ```
 
 Save the explicitly selected template draft. This writes to `generated_articles`
 and `article_sources`, and the saved article status must be `pending_review`.
 
 ```bash
-python smoke_article_pipeline.py --topic-id 1 --candidate template --save-selected-draft
+python -m news_pipeline.smoke_article_pipeline --topic-id 1 --candidate template --save-selected-draft
 ```
 
 Build a review report without writing to the database:
 
 ```bash
-python smoke_article_pipeline.py --article-id 1 --review-report
+python -m news_pipeline.smoke_article_pipeline --article-id 1 --review-report
 ```
 
 Validate a review decision in dry-run mode. This does not insert
 `article_reviews` and does not update `generated_articles.status`.
 
 ```bash
-python smoke_article_pipeline.py --article-id 1 --review-decision approved --reviewer editor --notes "Smoke test review" --dry-run
+python -m news_pipeline.smoke_article_pipeline --article-id 1 --review-decision approved --reviewer editor --notes "Smoke test review" --dry-run
 ```
 
 If the dry-run review is valid and a human editor wants to make the decision
 real, use the P8 review CLI explicitly:
 
 ```bash
-python review_article.py --article-id 1 --decision approved --reviewer editor --notes "Reviewed sources" --save-db
+python -m news_pipeline.review_article --article-id 1 --decision approved --reviewer editor --notes "Reviewed sources" --save-db
 ```
 
 Dry-run an approved-only Notion export. This does not call Notion and does not
 write `article_exports`:
 
 ```bash
-python export_article_to_notion.py --article-id 1 --dry-run
+python -m news_pipeline.export_article_to_notion --article-id 1 --dry-run
 ```
 
 Export an already approved article to Notion and record the export history:
 
 ```bash
-python export_article_to_notion.py --article-id 1 --export
+python -m news_pipeline.export_article_to_notion --article-id 1 --export
 ```
 
 The default export policy is idempotent. If the article already has an
@@ -102,13 +102,13 @@ not call Notion, and does not write another `article_exports` row.
 Retry a failed export explicitly:
 
 ```bash
-python export_article_to_notion.py --article-id 1 --export --retry-failed
+python -m news_pipeline.export_article_to_notion --article-id 1 --export --retry-failed
 ```
 
 Force a new Notion page when an exported record already exists:
 
 ```bash
-python export_article_to_notion.py --article-id 1 --export --force-reexport
+python -m news_pipeline.export_article_to_notion --article-id 1 --export --force-reexport
 ```
 
 P16 does not update an existing Notion page. `--force-reexport` creates a new
@@ -119,18 +119,19 @@ page and records a new export history row.
 Mock provider, no real LLM call:
 
 ```bash
-python smoke_article_pipeline.py --topic-id 1 --candidate llm --provider mock --dry-run
+python -m news_pipeline.smoke_article_pipeline --topic-id 1 --candidate llm --provider mock --dry-run
 ```
 
 OpenRouter provider, explicit opt-in:
 
 ```bash
-python smoke_article_pipeline.py --topic-id 1 --candidate llm --provider openrouter --dry-run
+python -m news_pipeline.smoke_article_pipeline --topic-id 1 --candidate llm --provider openrouter --dry-run
 ```
 
-OpenRouter requires environment configuration such as `OPENROUTER_API_KEY` and
-`OPENROUTER_DEFAULT_MODEL`. Do not place API keys in code, tests, logs, or
-fixtures.
+OpenRouter-compatible live LLM calls require `LLM_API_KEY` and
+`LLM_DEFAULT_MODEL`. `LLM_BASE_URL` is optional and defaults to
+`https://openrouter.ai/api/v1`; set it when using another compatible gateway.
+Do not place API keys in code, tests, logs, or fixtures.
 
 ## Write Boundaries
 
@@ -138,9 +139,9 @@ fixtures.
 - `--save-selected-draft` writes `generated_articles` and `article_sources`.
 - `--save-selected-draft` never writes `article_reviews`.
 - Review decision smoke is dry-run only.
-- Real review writes are handled by `review_article.py --save-db`.
-- Notion export is handled only by `export_article_to_notion.py`.
-- `export_article_to_notion.py --export` writes `article_exports` only.
+- Real review writes are handled by `python -m news_pipeline.review_article --save-db`.
+- Notion export is handled only by `python -m news_pipeline.export_article_to_notion`.
+- `python -m news_pipeline.export_article_to_notion --export` writes `article_exports` only.
 - Skipped idempotent exports do not write `article_exports`.
 - Notion export never updates `generated_articles.status`.
 - There is no current publish command.
