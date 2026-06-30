@@ -95,6 +95,25 @@ Export an already approved article to Notion and record the export history:
 python export_article_to_notion.py --article-id 1 --export
 ```
 
+The default export policy is idempotent. If the article already has an
+`article_exports.status = exported` Notion record, the command is skipped, does
+not call Notion, and does not write another `article_exports` row.
+
+Retry a failed export explicitly:
+
+```bash
+python export_article_to_notion.py --article-id 1 --export --retry-failed
+```
+
+Force a new Notion page when an exported record already exists:
+
+```bash
+python export_article_to_notion.py --article-id 1 --export --force-reexport
+```
+
+P16 does not update an existing Notion page. `--force-reexport` creates a new
+page and records a new export history row.
+
 ## LLM Dry-Run Examples
 
 Mock provider, no real LLM call:
@@ -122,6 +141,7 @@ fixtures.
 - Real review writes are handled by `review_article.py --save-db`.
 - Notion export is handled only by `export_article_to_notion.py`.
 - `export_article_to_notion.py --export` writes `article_exports` only.
+- Skipped idempotent exports do not write `article_exports`.
 - Notion export never updates `generated_articles.status`.
 - There is no current publish command.
 - There is no current CMS export.
@@ -137,6 +157,10 @@ fixtures.
 - `needs_sources`, safety failed, or quality blocked content cannot be saved or
   approved.
 - Notion export does not publish and does not change article status.
+- Existing exported Notion records are skipped by default.
+- Failed Notion exports require explicit `--retry-failed`.
+- `--force-reexport` creates a new Notion page; it does not patch or replace an
+  existing page.
 - Notion is an export target only, not the source of truth.
 - Notion API keys must stay in environment variables and must not be written to
   code, logs, database JSON, or CLI output.

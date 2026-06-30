@@ -19,6 +19,14 @@ MAX_RICH_TEXT_CONTENT = 1800
 MAX_PARAGRAPH_CHARS = 1800
 TRANSIENT_STATUS_CODES = {429, 500, 502, 503, 504}
 NON_RETRY_STATUS_CODES = {400, 401, 403}
+EXPORT_POLICY_SKIP_EXISTING = "skip_existing"
+EXPORT_POLICY_RETRY_FAILED = "retry_failed"
+EXPORT_POLICY_FORCE_REEXPORT = "force_reexport"
+EXPORT_POLICIES = {
+    EXPORT_POLICY_SKIP_EXISTING,
+    EXPORT_POLICY_RETRY_FAILED,
+    EXPORT_POLICY_FORCE_REEXPORT,
+}
 
 
 def _error(error_type: str, message: str, *, retryable: bool = False, **extra: Any) -> Dict[str, Any]:
@@ -154,6 +162,162 @@ def fetch_article_sources_for_export(dsn: str, article_id: int) -> List[Dict[str
                 (article_id,),
             )
             return json_safe(cur.fetchall())
+
+
+def fetch_article_export_history(dsn: str, article_id: int, target: str = "notion") -> List[Dict[str, Any]]:
+    try:
+        import psycopg
+        from psycopg.rows import dict_row
+    except ImportError as exc:
+        raise RuntimeError("psycopg is required for database operations") from exc
+
+    try:
+        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        id, article_id, target, target_id, target_url, status,
+                        request_json, response_json, error_json, exported_at, created_at
+                    FROM article_exports
+                    WHERE article_id = %s
+                      AND target = %s
+                    ORDER BY created_at DESC NULLS LAST, id DESC
+                    """,
+                    (article_id, target),
+                )
+                return json_safe(cur.fetchall())
+    except Exception as exc:
+        return [{"status": "error", "error": _error("db_error", str(exc))}]
+
+
+def determine_export_action(
+    export_history: List[Dict[str, Any]],
+    policy: str = EXPORT_POLICY_SKIP_EXISTING,
+) -> Dict[str, Any]:
+    export_history = json_safe(list(export_history or []))
+    policy = _text(policy) or EXPORT_POLICY_SKIP_EXISTING
+    warnings: List[Dict[str, Any]] = []
+    blockers: List[Dict[str, Any]] = []
+
+    if policy not in EXPORT_POLICIES:
+        blockers.append(_error("invalid_export_policy", "Unsupported export policy.", policy=policy))
+        return json_safe(
+            {
+                "action": "skip",
+                "can_export": False,
+                "policy": policy,
+                "existing_export": {},
+                "warnings": warnings,
+                "blockers": blockers,
+            }
+        )
+
+    history_error = next((item for item in export_history if item.get("status") == "error" or item.get("error")), None)
+    if history_error:
+        blockers.append(history_error.get("error") or _error("export_history_error", "Export history could not be loaded."))
+        return json_safe(
+            {
+                "action": "skip",
+                "can_export": False,
+                "policy": policy,
+                "existing_export": history_error,
+                "warnings": warnings,
+                "blockers": blockers,
+            }
+        )
+
+    exported = next((item for item in export_history if item.get("status") == "exported"), None)
+    failed = next((item for item in export_history if item.get("status") == "failed"), None)
+    existing = exported or failed or (export_history[0] if export_history else {})
+
+    if not export_history:
+        return json_safe(
+            {
+                "action": "export",
+                "can_export": True,
+                "policy": policy,
+                "existing_export": {},
+                "warnings": warnings,
+                "blockers": blockers,
+            }
+        )
+
+    if exported and policy == EXPORT_POLICY_FORCE_REEXPORT:
+        warnings.append(_error("force_reexport_existing_export", "Existing exported record found; force re-export will create a new Notion page."))
+        return json_safe(
+            {
+                "action": "force_reexport",
+                "can_export": True,
+                "policy": policy,
+                "existing_export": exported,
+                "warnings": warnings,
+                "blockers": blockers,
+            }
+        )
+
+    if exported:
+        warnings.append(_error("existing_exported_record", "Article already has an exported Notion record."))
+        return json_safe(
+            {
+                "action": "skip",
+                "can_export": False,
+                "policy": policy,
+                "existing_export": exported,
+                "warnings": warnings,
+                "blockers": blockers,
+            }
+        )
+
+    if failed and policy == EXPORT_POLICY_RETRY_FAILED:
+        warnings.append(_error("retry_failed_export", "Retrying a previous failed Notion export."))
+        return json_safe(
+            {
+                "action": "retry",
+                "can_export": True,
+                "policy": policy,
+                "existing_export": failed,
+                "warnings": warnings,
+                "blockers": blockers,
+            }
+        )
+
+    if failed and policy == EXPORT_POLICY_FORCE_REEXPORT:
+        warnings.append(_error("force_reexport_failed_export", "Force re-export requested after a failed Notion export."))
+        return json_safe(
+            {
+                "action": "force_reexport",
+                "can_export": True,
+                "policy": policy,
+                "existing_export": failed,
+                "warnings": warnings,
+                "blockers": blockers,
+            }
+        )
+
+    if failed:
+        warnings.append(_error("failed_export_requires_retry", "Previous failed Notion export found; pass --retry-failed to retry explicitly."))
+        return json_safe(
+            {
+                "action": "skip",
+                "can_export": False,
+                "policy": policy,
+                "existing_export": failed,
+                "warnings": warnings,
+                "blockers": blockers,
+            }
+        )
+
+    return json_safe(
+        {
+            "action": "export",
+            "can_export": True,
+            "policy": policy,
+            "existing_export": existing,
+            "warnings": warnings,
+            "blockers": blockers,
+        }
+    )
 
 
 def validate_article_exportable(

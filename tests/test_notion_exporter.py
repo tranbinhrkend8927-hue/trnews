@@ -82,6 +82,90 @@ def _assert_json_serializable(value):
     json.dumps(value, ensure_ascii=False)
 
 
+def _export_history(status="exported", **overrides):
+    row = {
+        "id": 200,
+        "article_id": 1,
+        "target": "notion",
+        "target_id": "page-1" if status == "exported" else None,
+        "target_url": "https://notion.example/page-1" if status == "exported" else None,
+        "status": status,
+        "request_json": {},
+        "response_json": {},
+        "error_json": {},
+        "exported_at": "2026-06-30T00:00:00Z" if status == "exported" else None,
+        "created_at": "2026-06-30T00:00:00Z",
+    }
+    row.update(overrides)
+    return [row]
+
+
+def test_determine_export_action_without_history_can_export():
+    action = notion_exporter.determine_export_action([])
+
+    assert action["action"] == "export"
+    assert action["can_export"] is True
+    assert action["policy"] == "skip_existing"
+    _assert_json_serializable(action)
+
+
+def test_determine_export_action_existing_exported_defaults_to_skip():
+    action = notion_exporter.determine_export_action(_export_history("exported"))
+
+    assert action["action"] == "skip"
+    assert action["can_export"] is False
+    assert action["existing_export"]["status"] == "exported"
+    assert action["warnings"]
+
+
+def test_determine_export_action_existing_exported_force_reexport_can_export():
+    action = notion_exporter.determine_export_action(
+        _export_history("exported"),
+        policy=notion_exporter.EXPORT_POLICY_FORCE_REEXPORT,
+    )
+
+    assert action["action"] == "force_reexport"
+    assert action["can_export"] is True
+    assert action["warnings"]
+
+
+def test_determine_export_action_failed_retry_failed_can_retry():
+    action = notion_exporter.determine_export_action(
+        _export_history("failed"),
+        policy=notion_exporter.EXPORT_POLICY_RETRY_FAILED,
+    )
+
+    assert action["action"] == "retry"
+    assert action["can_export"] is True
+
+
+def test_determine_export_action_failed_default_policy_requires_explicit_retry():
+    action = notion_exporter.determine_export_action(_export_history("failed"))
+
+    assert action["action"] == "skip"
+    assert action["can_export"] is False
+    assert action["warnings"][0]["type"] == "failed_export_requires_retry"
+
+
+def test_determine_export_action_failed_force_reexport_can_export_with_warning():
+    action = notion_exporter.determine_export_action(
+        _export_history("failed"),
+        policy=notion_exporter.EXPORT_POLICY_FORCE_REEXPORT,
+    )
+
+    assert action["action"] == "force_reexport"
+    assert action["can_export"] is True
+    assert action["warnings"]
+
+
+def test_determine_export_action_invalid_policy_returns_blocker():
+    action = notion_exporter.determine_export_action([], policy="publish")
+
+    assert action["action"] == "skip"
+    assert action["can_export"] is False
+    assert action["blockers"][0]["type"] == "invalid_export_policy"
+
+
 def test_status_approved_is_exportable():
     validation = notion_exporter.validate_article_exportable(_article(), _article_sources())
 
@@ -411,6 +495,7 @@ def test_cli_dry_run_does_not_call_notion_or_write_db(monkeypatch, capsys):
     monkeypatch.setattr(notion_cli, "get_postgres_dsn", lambda: "postgresql://example/db")
     monkeypatch.setattr(notion_cli, "fetch_article_for_export", lambda dsn, article_id: _article(id=article_id))
     monkeypatch.setattr(notion_cli, "fetch_article_sources_for_export", lambda dsn, article_id: _article_sources())
+    monkeypatch.setattr(notion_cli, "fetch_article_export_history", lambda dsn, article_id, target="notion": [])
 
     def fail_client(*args, **kwargs):
         raise AssertionError("dry-run must not build a live Notion client")
@@ -427,6 +512,7 @@ def test_cli_dry_run_does_not_call_notion_or_write_db(monkeypatch, capsys):
     assert exit_code == 0
     assert payload["success"] is True
     assert payload["dry_run"] is True
+    assert payload["export_action"]["action"] == "export"
     assert payload["summary"]["would_write_export_record"] is False
 
 
@@ -435,6 +521,7 @@ def test_cli_export_writes_record_without_updating_article(monkeypatch, capsys):
     monkeypatch.setattr(notion_cli, "get_postgres_dsn", lambda: "postgresql://example/db")
     monkeypatch.setattr(notion_cli, "fetch_article_for_export", lambda dsn, article_id: _article(id=article_id))
     monkeypatch.setattr(notion_cli, "fetch_article_sources_for_export", lambda dsn, article_id: _article_sources())
+    monkeypatch.setattr(notion_cli, "fetch_article_export_history", lambda dsn, article_id, target="notion": [])
     monkeypatch.setattr(
         notion_cli,
         "build_notion_client_from_env",
@@ -458,6 +545,8 @@ def test_cli_export_writes_record_without_updating_article(monkeypatch, capsys):
     assert exit_code == 0
     assert payload["success"] is True
     assert payload["summary"]["would_publish"] is False
+    assert payload["export_policy"] == "skip_existing"
+    assert payload["export_action"]["action"] == "export"
     assert calls["records"] == 1
     assert "published" not in json.dumps(payload["database"], ensure_ascii=False)
 
@@ -466,6 +555,7 @@ def test_cli_default_is_dry_run(monkeypatch, capsys):
     monkeypatch.setattr(notion_cli, "get_postgres_dsn", lambda: "postgresql://example/db")
     monkeypatch.setattr(notion_cli, "fetch_article_for_export", lambda dsn, article_id: _article(id=article_id))
     monkeypatch.setattr(notion_cli, "fetch_article_sources_for_export", lambda dsn, article_id: _article_sources())
+    monkeypatch.setattr(notion_cli, "fetch_article_export_history", lambda dsn, article_id, target="notion": [])
 
     exit_code = notion_cli.main(["--article-id", "1"])
     payload = json.loads(capsys.readouterr().out)
@@ -474,12 +564,159 @@ def test_cli_default_is_dry_run(monkeypatch, capsys):
     assert payload["dry_run"] is True
 
 
+def test_cli_dry_run_outputs_skip_action_for_existing_export(monkeypatch, capsys):
+    monkeypatch.setattr(notion_cli, "get_postgres_dsn", lambda: "postgresql://example/db")
+    monkeypatch.setattr(notion_cli, "fetch_article_for_export", lambda dsn, article_id: _article(id=article_id))
+    monkeypatch.setattr(notion_cli, "fetch_article_sources_for_export", lambda dsn, article_id: _article_sources())
+    monkeypatch.setattr(notion_cli, "fetch_article_export_history", lambda dsn, article_id, target="notion": _export_history("exported"))
+
+    def fail_client(*args, **kwargs):
+        raise AssertionError("skipped dry-run must not build a live Notion client")
+
+    monkeypatch.setattr(notion_cli, "build_notion_client_from_env", fail_client)
+
+    exit_code = notion_cli.main(["--article-id", "1", "--dry-run"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["success"] is True
+    assert payload["export_action"]["action"] == "skip"
+    assert payload["notion"]["skipped"] is True
+    assert payload["summary"]["would_write_export_record"] is False
+
+
+def test_cli_existing_exported_default_skips_without_notion_or_record(monkeypatch, capsys):
+    calls = {"client": 0, "records": 0}
+    monkeypatch.setattr(notion_cli, "get_postgres_dsn", lambda: "postgresql://example/db")
+    monkeypatch.setattr(notion_cli, "fetch_article_for_export", lambda dsn, article_id: _article(id=article_id))
+    monkeypatch.setattr(notion_cli, "fetch_article_sources_for_export", lambda dsn, article_id: _article_sources())
+    monkeypatch.setattr(notion_cli, "fetch_article_export_history", lambda dsn, article_id, target="notion": _export_history("exported"))
+
+    def fake_client(*args, **kwargs):
+        calls["client"] += 1
+        raise AssertionError("existing exported record must skip before Notion client creation")
+
+    def fake_record(*args, **kwargs):
+        calls["records"] += 1
+        raise AssertionError("skipped export must not write article_exports")
+
+    monkeypatch.setattr(notion_cli, "build_notion_client_from_env", fake_client)
+    monkeypatch.setattr(notion_cli, "save_article_export_record_to_postgres", fake_record)
+
+    exit_code = notion_cli.main(["--article-id", "1", "--export"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["success"] is True
+    assert payload["export_action"]["action"] == "skip"
+    assert payload["notion"]["reason"] == "existing_exported_record"
+    assert payload["summary"]["would_write_export_record"] is False
+    assert calls == {"client": 0, "records": 0}
+
+
+def test_cli_force_reexport_existing_exported_calls_notion_and_record(monkeypatch, capsys):
+    calls = {"records": 0}
+    monkeypatch.setattr(notion_cli, "get_postgres_dsn", lambda: "postgresql://example/db")
+    monkeypatch.setattr(notion_cli, "fetch_article_for_export", lambda dsn, article_id: _article(id=article_id))
+    monkeypatch.setattr(notion_cli, "fetch_article_sources_for_export", lambda dsn, article_id: _article_sources())
+    monkeypatch.setattr(notion_cli, "fetch_article_export_history", lambda dsn, article_id, target="notion": _export_history("exported"))
+    monkeypatch.setattr(
+        notion_cli,
+        "build_notion_client_from_env",
+        lambda require_api_key=True: {
+            "success": True,
+            "config": {"success": True, "has_api_key": True},
+            "client": FakeNotionClient(),
+            "errors": [],
+        },
+    )
+
+    def fake_record(dsn, export_result, dry_run=True):
+        calls["records"] += 1
+        assert export_result["export_action"]["action"] == "force_reexport"
+        return {"success": True, "dry_run": False, "inserted_count": 1, "export_id": 89, "status": "exported", "errors": []}
+
+    monkeypatch.setattr(notion_cli, "save_article_export_record_to_postgres", fake_record)
+
+    exit_code = notion_cli.main(["--article-id", "1", "--export", "--force-reexport"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["success"] is True
+    assert payload["export_policy"] == "force_reexport"
+    assert payload["export_action"]["action"] == "force_reexport"
+    assert calls["records"] == 1
+
+
+def test_cli_failed_default_policy_skips_and_does_not_retry(monkeypatch, capsys):
+    monkeypatch.setattr(notion_cli, "get_postgres_dsn", lambda: "postgresql://example/db")
+    monkeypatch.setattr(notion_cli, "fetch_article_for_export", lambda dsn, article_id: _article(id=article_id))
+    monkeypatch.setattr(notion_cli, "fetch_article_sources_for_export", lambda dsn, article_id: _article_sources())
+    monkeypatch.setattr(notion_cli, "fetch_article_export_history", lambda dsn, article_id, target="notion": _export_history("failed"))
+
+    def fail_client(*args, **kwargs):
+        raise AssertionError("failed export must not retry without --retry-failed")
+
+    monkeypatch.setattr(notion_cli, "build_notion_client_from_env", fail_client)
+
+    exit_code = notion_cli.main(["--article-id", "1", "--export"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["success"] is True
+    assert payload["export_action"]["action"] == "skip"
+    assert payload["export_action"]["warnings"][0]["type"] == "failed_export_requires_retry"
+    assert payload["summary"]["would_write_export_record"] is False
+
+
+def test_cli_failed_retry_failed_calls_notion_and_record(monkeypatch, capsys):
+    calls = {"records": 0}
+    monkeypatch.setattr(notion_cli, "get_postgres_dsn", lambda: "postgresql://example/db")
+    monkeypatch.setattr(notion_cli, "fetch_article_for_export", lambda dsn, article_id: _article(id=article_id))
+    monkeypatch.setattr(notion_cli, "fetch_article_sources_for_export", lambda dsn, article_id: _article_sources())
+    monkeypatch.setattr(notion_cli, "fetch_article_export_history", lambda dsn, article_id, target="notion": _export_history("failed"))
+    monkeypatch.setattr(
+        notion_cli,
+        "build_notion_client_from_env",
+        lambda require_api_key=True: {
+            "success": True,
+            "config": {"success": True, "has_api_key": True},
+            "client": FakeNotionClient(),
+            "errors": [],
+        },
+    )
+
+    def fake_record(dsn, export_result, dry_run=True):
+        calls["records"] += 1
+        assert export_result["export_action"]["action"] == "retry"
+        return {"success": True, "dry_run": False, "inserted_count": 1, "export_id": 90, "status": "exported", "errors": []}
+
+    monkeypatch.setattr(notion_cli, "save_article_export_record_to_postgres", fake_record)
+
+    exit_code = notion_cli.main(["--article-id", "1", "--export", "--retry-failed"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["success"] is True
+    assert payload["export_policy"] == "retry_failed"
+    assert payload["export_action"]["action"] == "retry"
+    assert calls["records"] == 1
+
+
 def test_cli_rejects_dry_run_and_export_together(capsys):
     exit_code = notion_cli.main(["--article-id", "1", "--dry-run", "--export"])
     payload = json.loads(capsys.readouterr().out)
 
     assert exit_code == 1
     assert payload["errors"][0]["type"] == "invalid_mode"
+
+
+def test_cli_rejects_retry_failed_and_force_reexport_together(capsys):
+    exit_code = notion_cli.main(["--article-id", "1", "--export", "--retry-failed", "--force-reexport"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert payload["errors"][0]["type"] == "invalid_policy_flags"
 
 
 def test_output_is_json_serializable():

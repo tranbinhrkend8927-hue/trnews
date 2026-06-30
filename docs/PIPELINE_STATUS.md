@@ -27,6 +27,7 @@ automatic approval.
 - P14A/P14B: Smoke documentation and checkpoint commit planning.
 - P15: Notion export for approved articles only, with `article_exports` history
   records.
+- P16: Idempotent Notion export policy using `article_exports` history.
 
 ## Main Pipeline
 
@@ -115,10 +116,24 @@ Dry-run an approved article export without calling Notion or writing
 python export_article_to_notion.py --article-id 1 --dry-run
 ```
 
-Export an approved article to Notion and write an `article_exports` record:
+Export an approved article to Notion and write an `article_exports` record.
+The default policy is idempotent: if an exported Notion record already exists,
+the command is skipped and no new Notion page is created.
 
 ```bash
 python export_article_to_notion.py --article-id 1 --export
+```
+
+Retry a previous failed export explicitly:
+
+```bash
+python export_article_to_notion.py --article-id 1 --export --retry-failed
+```
+
+Create a new Notion page even when an exported record already exists:
+
+```bash
+python export_article_to_notion.py --article-id 1 --export --force-reexport
 ```
 
 Required environment for real export:
@@ -130,6 +145,18 @@ The exporter stores sanitized request, response, and error summaries in
 `article_exports`. It must not store API keys, Authorization headers, or full
 raw Notion responses. Notion is an outbound export target, not the primary
 database.
+
+P16 export policies:
+
+- `skip_existing` is the default. Existing `status = exported` records are
+  skipped. Skipped exports do not call Notion and do not write `article_exports`.
+- `retry_failed` retries only when no exported record exists and a failed record
+  is present.
+- `force_reexport` creates a new Notion page and records a new export history
+  row. It does not update an existing Notion page.
+
+P16 still does not modify `generated_articles.status`, does not set
+`published`, and does not publish content.
 
 ## Checkpoint Commit Grouping Suggestion
 
@@ -145,6 +172,6 @@ future checkpoint plan.
 
 ## Next Step Suggestions
 
-- P16: Add idempotency/re-export policy for `article_exports` if repeated
-  exports need explicit handling.
-- P17: Add CMS export only after approved-only export tracking is stable.
+- P17: Add update-existing-Notion-page behavior only if editors need page
+  replacement instead of force re-export.
+- P18: Add CMS export only after approved-only export tracking is stable.
