@@ -33,8 +33,8 @@ class OpenAICompatibleClient:
         api_key: Optional[str] = None,
     ) -> None:
         self.session = session or requests
-        self.base_url = str(base_url or os.getenv("LLM_BASE_URL") or DEFAULT_LLM_BASE_URL).strip()
-        self.api_key = str(api_key or os.getenv("LLM_API_KEY") or os.getenv("OPENROUTER_API_KEY") or "").strip()
+        self.base_url = str(base_url or _env_value("LLM_BASE_URL") or DEFAULT_LLM_BASE_URL).strip()
+        self.api_key = str(api_key or _env_value("LLM_API_KEY") or _env_value("OPENROUTER_API_KEY") or "").strip()
 
     @property
     def endpoint(self) -> str:
@@ -134,3 +134,14 @@ class OpenAICompatibleClient:
             retryable=False,
             details={"attempts": attempts},
         )
+
+
+def _env_value(name: str) -> str:
+    value = os.getenv(name)
+    if value:
+        return value
+    try:
+        from src.config.loader import load_local_env
+    except Exception:
+        return ""
+    return str(load_local_env().get(name) or "")

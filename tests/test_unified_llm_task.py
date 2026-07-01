@@ -126,6 +126,8 @@ def test_model_policies_hold_task_temperatures(monkeypatch):
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
 
     assert get_model_policy("fx_article_id").temperature == 0.35
+    assert get_model_policy("article_draft").temperature == 0.35
+    assert get_model_policy("article_draft").task_name == "article_draft"
     assert get_model_policy("japan_fx_content").task_name == "fx_article_id"
     assert get_model_policy("rss_summary").temperature == 0.2
     assert get_model_policy("market_alert").temperature == 0.1

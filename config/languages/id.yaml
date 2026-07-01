@@ -1,0 +1,41 @@
+{
+  "language": "id",
+  "locale": "id-ID",
+  "market": "Indonesia",
+  "audience": "Indonesian retail readers interested in Rupiah, USD/IDR, Bank Indonesia, Fed, inflation, and macro events.",
+  "tone": "clear, careful, explanatory, not sensational",
+  "writing_rules": [
+    "Use Bahasa Indonesia.",
+    "Avoid sensational claims.",
+    "Explain financial terms in simple language.",
+    "Do not give buy/sell instructions.",
+    "Do not fabricate prices, data, URLs, institutions, or publication dates."
+  ],
+  "required_sections": [
+    "Sumber",
+    "Catatan risiko"
+  ],
+  "risk_disclaimer": "Artikel ini hanya untuk informasi dan edukasi, bukan rekomendasi investasi atau ajakan membeli/menjual aset keuangan.",
+  "forbidden_claims": [
+    "profit guarantee",
+    "buy/sell instruction",
+    "take profit",
+    "stop loss",
+    "certain prediction"
+  ],
+  "seo": {
+    "title_max_length": 70,
+    "description_max_length": 170
+  },
+  "slug": {
+    "strategy": "ascii_lower_kebab",
+    "allow_unicode": false
+  },
+  "notion": {
+    "title_property": "Name",
+    "status_property": "Status",
+    "language_property": "Language",
+    "market_property": "Market",
+    "symbol_property": "Symbol"
+  }
+}

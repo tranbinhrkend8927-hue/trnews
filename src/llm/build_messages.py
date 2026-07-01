@@ -4,6 +4,7 @@ import json
 from typing import Any, Dict
 
 from .model_policies import canonical_task_name
+from .prompt_renderer import PromptRenderer
 from .prompts import fx_article_id, market_alert, rss_summary
 from .prompts.global_prompt import GLOBAL_SYSTEM_PROMPT, PROMPT_VERSION as GLOBAL_PROMPT_VERSION
 from .types import LLMConfigError, PromptBuildResult
@@ -18,6 +19,22 @@ TASK_PROMPTS = {
 
 def build_messages(task_name: str, input_data: Dict[str, Any]) -> PromptBuildResult:
     canonical = canonical_task_name(task_name)
+    if canonical == "article_draft":
+        input_data = dict(input_data or {})
+        language_profile = input_data.get("language_profile") or {}
+        language = str(input_data.get("language") or language_profile.get("language") or "").strip()
+        if not language:
+            raise LLMConfigError(
+                "language or language_profile.language is required for article_draft.",
+                task_name=canonical,
+            )
+        rendered = PromptRenderer().render(canonical, language, input_data)
+        return PromptBuildResult(
+            task_name=rendered.task,
+            prompt_version=rendered.prompt_version,
+            messages=rendered.messages,
+        )
+
     if canonical == "json_extract":
         module = rss_summary
     else:

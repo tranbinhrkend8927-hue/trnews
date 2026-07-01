@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "defaults": {
+    "enabled": true,
+    "schedule": "manual",
+    "max_articles_per_run": 3,
+    "min_sources_per_article": 1,
+    "max_sources_per_article": 5,
+    "dry_run": false
+  },
+  "markets": [
+    {
+      "id": "usd_idr_id",
+      "enabled": true,
+      "symbol": "USDIDR",
+      "exchange": "FX_IDC",
+      "base_currency": "USD",
+      "quote_currency": "IDR",
+      "tradingview": {
+        "language": "id",
+        "locale": "id",
+        "url": "https://id.tradingview.com/symbols/USDIDR/news/",
+        "sort": "latest",
+        "section": "all",
+        "provider": null,
+        "area": null,
+        "max_headlines": 10,
+        "max_articles": 3
+      },
+      "content": {
+        "language": "id",
+        "market": "Indonesia",
+        "task": "article_draft",
+        "article_type": "fx_news_explainer",
+        "topic_strategy": "latest_forex_news",
+        "source_policy": {
+          "min_sources": 1,
+          "max_sources": 5,
+          "require_body": true,
+          "allow_paywalled_summary": true,
+          "max_source_age_hours": 72
+        }
+      },
+      "llm": {
+        "draft_profile": "article_writer_id",
+        "review_profile": "article_reviewer_id",
+        "grounding_profile": "grounding_checker_id"
+      },
+      "notion": {
+        "target": "notion_articles_id"
+      }
+    }
+  ]
+}

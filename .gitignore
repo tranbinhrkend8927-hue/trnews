@@ -50,6 +50,7 @@ pylint-output.txt
 *.pot
 *.pyc
 export/
+.runs/
 
 # Ignore test script
 *test.py

@@ -1,0 +1,21 @@
+{
+  "targets": {
+    "notion_articles_id": {
+      "language": "id",
+      "market": "Indonesia",
+      "parent_type": "data_source",
+      "data_source_id_env": "NOTION_DATA_SOURCE_ID_ID",
+      "fallback_data_source_id_env": "NOTION_DATA_SOURCE_ID",
+      "fallback_data_source_id_value": "local-config-validation-placeholder",
+      "status_default": "AI Draft",
+      "reviewer_status": "Needs Review",
+      "duplicate_policy": "update_existing",
+      "unique_key_fields": [
+        "market_id",
+        "symbol",
+        "language",
+        "source_bundle_hash"
+      ]
+    }
+  }
+}

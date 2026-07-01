@@ -1,0 +1,9 @@
+{
+  "name": "article_draft",
+  "version": "article_draft@2026-06-30",
+  "description": "Generate a multilingual FX news explainer article draft from a grounded TradingView source bundle.",
+  "output_schema": "article_draft_v1",
+  "input_required": [
+    "article_brief"
+  ]
+}

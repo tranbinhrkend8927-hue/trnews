@@ -1,4 +1,23 @@
 # TradingView Scraper
+
+## Content Pipeline Operations
+
+For the AI content pipeline, start with the production hardening docs:
+
+- [Real Run Checklist](docs/REAL_RUN_CHECKLIST.md)
+- [Validation Flow](docs/VALIDATION_FLOW.md)
+- [Operations Runbook](docs/OPERATIONS_RUNBOOK.md)
+- [Configuration Guide](docs/CONFIGURATION_GUIDE.md)
+- [Adding New Market](docs/ADDING_NEW_MARKET.md)
+- [Adding New Language](docs/ADDING_NEW_LANGUAGE.md)
+
+Safe preflight commands:
+
+```bash
+python -m src.jobs.production_check --market usd_idr_id
+python -m src.jobs.smoke_test --market usd_idr_id
+python -m src.jobs.run_market --market usd_idr_id --dry-run
+```
 [![Python 3.8](https://img.shields.io/badge/python-3.8-blue.svg)](https://www.python.org/downloads/release/python-380/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![MIT License](https://img.shields.io/github/license/mnwato/tradingview-scraper.svg?color=brightgreen)](https://opensource.org/licenses/MIT)
