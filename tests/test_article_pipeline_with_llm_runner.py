@@ -198,8 +198,32 @@ def test_llm_runner_receives_compact_source_bundle_without_raw_payload():
     assert len(llm_source["content"]) < 1500
     assert llm_source["content"].endswith("[truncated]")
     article_brief = runner.calls[0]["input_data"]["article_brief"]
+    assert "deep, readable FX news explainer" in article_brief
+    assert "EDITORIAL_BRIEF" in article_brief
+    assert "REQUIRED_BODY_SECTIONS" in article_brief
     assert "SOURCE 1" in article_brief
     assert "source_id: src-1" in article_brief
     assert "title: USD/IDR moves after Fed comments" in article_brief
     assert "content:" in article_brief
     assert "large raw payload" not in article_brief
+
+
+def test_llm_runner_receives_configured_profile_overrides(monkeypatch):
+    monkeypatch.setattr("src.content.article_pipeline._local_env", lambda: {})
+    monkeypatch.delenv("LLM_WRITER_MODEL", raising=False)
+    monkeypatch.delenv("LLM_DEFAULT_MODEL", raising=False)
+    runner = FakeLLMRunner(success_result())
+    pipeline = ArticlePipeline(
+        config_registry=registry(),
+        tradingview_adapter=FakeAdapter(),
+        source_bundle_builder=SourceBundleBuilder(),
+        llm_runner=runner,
+    )
+
+    result = pipeline.run_market("usd_idr_id", dry_run=True)
+
+    assert result["success"] is True
+    assert runner.calls[0]["profile"] == "article_writer_id"
+    assert runner.calls[0]["overrides"]["model"] == "openrouter/auto"
+    assert runner.calls[0]["overrides"]["temperature"] == 0.35
+    assert runner.calls[0]["overrides"]["max_tokens"] == 2200

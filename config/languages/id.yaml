@@ -27,6 +27,11 @@
     "title_max_length": 70,
     "description_max_length": 170
   },
+  "quality": {
+    "min_body_length": 180,
+    "min_faq_count": 1,
+    "min_key_takeaways": 1
+  },
   "slug": {
     "strategy": "ascii_lower_kebab",
     "allow_unicode": false

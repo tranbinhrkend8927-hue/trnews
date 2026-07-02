@@ -12,6 +12,7 @@ def test_loads_default_pipeline_and_language_config():
     assert registry.pipeline.markets[0].id == "usd_idr_id"
     assert registry.languages["id"].market == "Indonesia"
     assert "article_writer_id" in registry.llm_profiles.profiles
+    assert "article_reviewer_id" in registry.llm_profiles.profiles
     assert "notion_articles_id" in registry.notion_targets.targets
 
 
@@ -33,6 +34,8 @@ def test_enabled_market_references_existing_language_llm_target_and_prompt():
 
     assert market.content.language in registry.languages
     assert market.llm.draft_profile in registry.llm_profiles.profiles
+    if market.llm.review_profile:
+        assert market.llm.review_profile in registry.llm_profiles.profiles
     assert market.notion.target in registry.notion_targets.targets
     assert Path("src/llm/prompts/article_draft/id.system.md").exists()
     assert result.success is True

@@ -19,13 +19,13 @@ TASK_PROMPTS = {
 
 def build_messages(task_name: str, input_data: Dict[str, Any]) -> PromptBuildResult:
     canonical = canonical_task_name(task_name)
-    if canonical == "article_draft":
+    if canonical in {"article_draft", "article_review"}:
         input_data = dict(input_data or {})
         language_profile = input_data.get("language_profile") or {}
         language = str(input_data.get("language") or language_profile.get("language") or "").strip()
         if not language:
             raise LLMConfigError(
-                "language or language_profile.language is required for article_draft.",
+                f"language or language_profile.language is required for {canonical}.",
                 task_name=canonical,
             )
         rendered = PromptRenderer().render(canonical, language, input_data)

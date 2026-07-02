@@ -20,6 +20,10 @@ class SourceBundle(BaseModel):
     warnings: list[dict] = Field(default_factory=list)
     errors: list[dict] = Field(default_factory=list)
     source_trace: dict = Field(default_factory=dict)
+    # Phase 1: source enrichment and quality gate
+    enriched_sources: list[dict] = Field(default_factory=list)
+    source_quality_report: dict | None = None
+    recommended_action: str = "write_article"
 
 
 class SourceBundleBuilder:

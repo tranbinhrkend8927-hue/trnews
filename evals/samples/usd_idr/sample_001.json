@@ -1,0 +1,38 @@
+{
+  "id": "usd_idr_001",
+  "market_id": "usd_idr_id",
+  "language": "id",
+  "description": "Strong-source USD/IDR sample suitable for a deep article.",
+  "source_bundle": {
+    "symbol": "USDIDR",
+    "sources": [
+      {
+        "source_id": "tv-001",
+        "provider": "TradingView",
+        "title": "USD/IDR bergerak setelah komentar bank sentral",
+        "url": "https://example.com/usdidr-strong-1",
+        "content": "Pasar mencermati komentar bank sentral dan data ekonomi terbaru."
+      },
+      {
+        "source_id": "tv-002",
+        "provider": "TradingView",
+        "title": "Rupiah dipantau menjelang data inflasi",
+        "url": "https://example.com/usdidr-strong-2",
+        "content": "Pelaku pasar menunggu data inflasi dan arah dolar AS."
+      }
+    ],
+    "source_quality_report": {
+      "source_count": 2,
+      "usable_source_count": 2,
+      "overall_source_quality": "strong",
+      "recommended_action": "write_article",
+      "source_gaps": []
+    }
+  },
+  "expected": {
+    "content_type": "deep_article",
+    "must_include_sections": ["Ikhtisar peristiwa", "Latar belakang", "Dampak pasar", "Sumber", "Catatan risiko"],
+    "forbidden_phrases": ["beli sekarang", "jual sekarang", "pasti naik", "pasti turun"],
+    "minimum_source_count": 2
+  }
+}

@@ -39,6 +39,13 @@ def page(status="Approved", page_id="page-1", score=5, content_job_key="job-1"):
             "Name": title_prop("Title"),
             "Status": select_prop(status),
             "Review Notes": rich_prop("Looks good"),
+            "Editor Notes": rich_prop("Editor says good"),
+            "Editor Score": number_prop(4),
+            "Rejection Reason": rich_prop("Unsupported claim"),
+            "Edited Headline": rich_prop("Edited USD/IDR headline"),
+            "Edited Summary": rich_prop("Edited summary text"),
+            "Final Publish Decision": select_prop("publish"),
+            "Reviewed At": {"date": {"start": "2026-07-02T10:00:00Z"}},
             "Quality Score": number_prop(score),
             "Factuality Score": number_prop(4),
             "Language Score": number_prop(3),
@@ -97,6 +104,7 @@ def test_extract_property_types():
 
 def test_status_mapping():
     assert map_notion_status_to_review_status("Approved") == "approved"
+    assert map_notion_status_to_review_status("Needs Edit") == "needs_edit"
     assert map_notion_status_to_review_status("Needs Review") is None
     assert map_notion_status_to_review_status("unknown") is None
 
@@ -107,8 +115,22 @@ def test_notion_page_to_review_feedback_approved_page():
     assert feedback.review_status == "approved"
     assert feedback.notion_page_id == "page-1"
     assert feedback.content_job_key == "job-1"
+    assert feedback.editor_score == 4
     assert feedback.quality_score == 5
     assert feedback.reviewer == "editor"
+    assert feedback.notes == "Editor says good"
+    assert feedback.rejection_reason == "Unsupported claim"
+    assert feedback.edited_headline == "Edited USD/IDR headline"
+    assert feedback.edited_summary == "Edited summary text"
+    assert feedback.final_publish_decision == "publish"
+    assert feedback.reviewed_at == "2026-07-02T10:00:00Z"
+
+
+def test_notion_page_to_review_feedback_needs_edit_page():
+    feedback = notion_page_to_review_feedback(page(status="Needs Edit"))
+
+    assert feedback.review_status == "needs_edit"
+    assert feedback.edit_required is True
 
 
 def test_notion_page_to_review_feedback_skips_draft_page():

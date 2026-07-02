@@ -4,7 +4,8 @@ from src.review.feedback import ReviewFeedback
 
 
 POSITIVE_STATUSES = {"approved", "published"}
-FIX_STATUSES = {"needs_rewrite", "needs_source_fix", "needs_compliance_fix", "needs_language_fix"}
+FIX_STATUSES = {"needs_edit", "needs_rewrite", "needs_source_fix", "needs_compliance_fix", "needs_language_fix"}
+NEGATIVE_STATUSES = {"rejected", *FIX_STATUSES}
 
 
 def summarize_review_feedback(feedback_items: list[ReviewFeedback]) -> dict:
@@ -20,6 +21,7 @@ def summarize_review_feedback(feedback_items: list[ReviewFeedback]) -> dict:
         "language_fix_rate": 0.0,
         "avg_scores": {
             "quality": None,
+            "editor": None,
             "factuality": None,
             "language": None,
             "seo": None,
@@ -30,6 +32,7 @@ def summarize_review_feedback(feedback_items: list[ReviewFeedback]) -> dict:
         "by_model": {},
         "by_prompt_version": {},
         "top_issues": {},
+        "data_quality": summarize_feedback_data_quality(feedback_items),
     }
     if not feedback_items:
         return summary
@@ -51,6 +54,7 @@ def summarize_review_feedback(feedback_items: list[ReviewFeedback]) -> dict:
     summary["language_fix_rate"] = _rate(sum(1 for item in feedback_items if item.review_status == "needs_language_fix"), total)
     summary["avg_scores"] = {
         "quality": _avg([item.quality_score for item in feedback_items]),
+        "editor": _avg([item.editor_score for item in feedback_items]),
         "factuality": _avg([item.factuality_score for item in feedback_items]),
         "language": _avg([item.language_score for item in feedback_items]),
         "seo": _avg([item.seo_score for item in feedback_items]),
@@ -59,6 +63,43 @@ def summarize_review_feedback(feedback_items: list[ReviewFeedback]) -> dict:
     _finalize_quality_buckets(summary["by_model"])
     _finalize_quality_buckets(summary["by_prompt_version"])
     return summary
+
+
+def summarize_feedback_data_quality(feedback_items: list[ReviewFeedback]) -> dict:
+    report = {
+        "total": len(feedback_items),
+        "warning_count": 0,
+        "warnings_by_type": {},
+        "affected_feedback_ids": [],
+    }
+    for item in feedback_items:
+        warning_types = _feedback_quality_warnings(item)
+        if not warning_types:
+            continue
+        report["affected_feedback_ids"].append(item.feedback_id)
+        for warning_type in warning_types:
+            report["warning_count"] += 1
+            report["warnings_by_type"][warning_type] = report["warnings_by_type"].get(warning_type, 0) + 1
+    return report
+
+
+def _feedback_quality_warnings(item: ReviewFeedback) -> list[str]:
+    warnings = []
+    if not item.content_job_key and not item.notion_page_id:
+        warnings.append("missing_stable_identifier")
+    if item.review_status == "rejected" and not item.rejection_reason and not item.notes:
+        warnings.append("rejected_without_reason")
+    if item.review_status in POSITIVE_STATUSES and item.final_publish_decision == "do_not_publish":
+        warnings.append("positive_status_with_negative_publish_decision")
+    if item.review_status in NEGATIVE_STATUSES and item.final_publish_decision == "publish":
+        warnings.append("negative_status_with_publish_decision")
+    if item.review_status in POSITIVE_STATUSES and item.editor_score is not None and item.editor_score <= 2:
+        warnings.append("positive_status_with_low_editor_score")
+    if item.review_status in NEGATIVE_STATUSES and item.editor_score is not None and item.editor_score >= 4:
+        warnings.append("negative_status_with_high_editor_score")
+    if item.metadata.get("warnings"):
+        warnings.append("source_metadata_warning")
+    return warnings
 
 
 def _rate(count: int, total: int) -> float:

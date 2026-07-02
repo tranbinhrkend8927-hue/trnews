@@ -6,3 +6,4 @@ websockets>=13.1
 websocket-client>=1.8.0
 python-dotenv>=1.0.1
 psycopg[binary]>=3.2.0
+trafilatura>=2.0.0

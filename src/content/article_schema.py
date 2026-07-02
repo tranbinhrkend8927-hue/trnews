@@ -26,6 +26,11 @@ class UncertainClaim(BaseModel):
     severity: Literal["low", "medium", "high"] = "low"
 
 
+class EditorialSuggestion(BaseModel):
+    type: str
+    text: str
+
+
 class ArticleDraft(BaseModel):
     title: str
     slug: str
@@ -38,6 +43,15 @@ class ArticleDraft(BaseModel):
     symbol: str
     article_type: str
     risk_disclaimer: str
+    region: str = ""
+    search_intent: str = ""
+    primary_keyword: str = ""
+    secondary_keywords: list[str] = Field(default_factory=list)
+    candidate_titles: list[str] = Field(default_factory=list)
+    editorial_angle: str = ""
+    key_takeaways: list[str] = Field(default_factory=list)
+    evergreen_context: str = ""
+    editor_notes: list[EditorialSuggestion] = Field(default_factory=list)
     faq: list[FAQItem] = Field(default_factory=list)
     sources_used: list[SourceUsed] = Field(default_factory=list)
     uncertain_claims: list[UncertainClaim] = Field(default_factory=list)

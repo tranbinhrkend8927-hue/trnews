@@ -70,6 +70,72 @@ def test_source_count_and_urls_are_mapped():
     assert "https://example.com/a" in props["Source URLs"]["rich_text"][0]["text"]["content"]
 
 
+def test_editorial_seo_fields_are_mapped():
+    article, market, profile, bundle, validation, llm, target = _context()
+    props = NotionPropertyMapper().build_properties(
+        article=article, market=market, language_profile=profile, source_bundle=bundle, validation=validation, llm=llm, target=target
+    )
+
+    assert props["Search Intent"]["rich_text"][0]["text"]["content"] == article["search_intent"]
+    assert props["Primary Keyword"]["rich_text"][0]["text"]["content"] == article["primary_keyword"]
+    assert article["candidate_titles"][0] in props["Candidate Titles"]["rich_text"][0]["text"]["content"]
+
+
+def test_structured_brief_properties_are_mapped():
+    article, market, profile, bundle, validation, llm, target = _context()
+    bundle["editorial_brief"] = {"content_type": "market_brief", "confidence_level": "low"}
+    props = NotionPropertyMapper().build_properties(
+        article=article, market=market, language_profile=profile, source_bundle=bundle, validation=validation, llm=llm, target=target
+    )
+
+    assert props["Brief Content Type"]["select"]["name"] == "market_brief"
+    assert props["Brief Confidence"]["select"]["name"] == "low"
+
+
+def test_source_quality_properties_are_mapped():
+    article, market, profile, bundle, validation, llm, target = _context()
+    bundle["source_quality_report"] = {
+        "usable_source_count": 2,
+        "overall_source_quality": "acceptable",
+    }
+    props = NotionPropertyMapper().build_properties(
+        article=article, market=market, language_profile=profile, source_bundle=bundle, validation=validation, llm=llm, target=target
+    )
+
+    assert props["Usable Source Count"]["number"] == 2
+    assert props["Source Quality"]["select"]["name"] == "acceptable"
+
+
+def test_ai_review_properties_are_mapped():
+    article, market, profile, bundle, validation, llm, target = _context()
+    bundle["ai_review"] = {
+        "publish_readiness": "needs_edit",
+        "scores": {"grounding": 70, "depth": 65, "financial_safety": 90},
+    }
+    props = NotionPropertyMapper().build_properties(
+        article=article, market=market, language_profile=profile, source_bundle=bundle, validation=validation, llm=llm, target=target
+    )
+
+    assert props["AI Review Readiness"]["select"]["name"] == "needs_edit"
+    assert props["AI Grounding Score"]["number"] == 70
+    assert props["AI Depth Score"]["number"] == 65
+    assert props["AI Financial Safety Score"]["number"] == 90
+
+
+def test_article_quality_report_properties_are_mapped():
+    article, market, profile, bundle, validation, llm, target = _context()
+    bundle["article_quality_report"] = {
+        "editor_ready_score": 82,
+        "final_recommended_status": "needs_review",
+    }
+    props = NotionPropertyMapper().build_properties(
+        article=article, market=market, language_profile=profile, source_bundle=bundle, validation=validation, llm=llm, target=target
+    )
+
+    assert props["Editor Ready Score"]["number"] == 82
+    assert props["Final Recommended Status"]["select"]["name"] == "needs_review"
+
+
 def test_prompt_version_and_model_are_mapped():
     article, market, profile, bundle, validation, llm, target = _context()
     props = NotionPropertyMapper().build_properties(
@@ -116,6 +182,100 @@ def test_blocks_include_article_body():
 
     assert any("Article Body" in _block_text(block) for block in blocks)
     assert any("Pembuka." in _block_text(block) for block in blocks)
+
+
+def test_blocks_include_editorial_brief_and_notes():
+    article, _, _, bundle, validation, llm, _ = _context()
+    blocks = NotionBlockBuilder().build_blocks(article=article, source_bundle=bundle, validation=validation, llm=llm)
+
+    assert any("Editorial Brief" in _block_text(block) for block in blocks)
+    assert any(article["editorial_angle"] in _block_text(block) for block in blocks)
+    assert any("Editor Notes" in _block_text(block) for block in blocks)
+    assert any("readability" in _block_text(block) for block in blocks)
+
+
+def test_blocks_include_structured_editorial_brief_when_available():
+    article, _, _, bundle, validation, llm, _ = _context()
+    bundle["editorial_brief"] = {
+        "content_type": "market_brief",
+        "confidence_level": "low",
+        "primary_angle": "Summarize known facts and source limits.",
+        "event_summary": "USD/IDR source event.",
+        "why_it_matters": "Readers need context.",
+        "market_context": "FX context.",
+        "target_reader": "Retail FX readers",
+        "reader_questions": ["What happened?"],
+        "must_cover": ["Source limitations"],
+        "avoid_claims": ["No trading advice"],
+        "source_gaps": ["not_enough_usable_sources_for_deep_article"],
+        "recommended_structure": ["Ikhtisar singkat"],
+    }
+    bundle["brief_validation"] = {
+        "passed": True,
+        "recommended_status": "write_brief_only",
+        "issues": [{"severity": "warning", "code": "low_confidence", "message": "Brief confidence is low."}],
+    }
+
+    blocks = NotionBlockBuilder().build_blocks(article=article, source_bundle=bundle, validation=validation, llm=llm)
+
+    assert any("Content type: market_brief" in _block_text(block) for block in blocks)
+    assert any("Primary angle: Summarize known facts" in _block_text(block) for block in blocks)
+    assert any("Source gap: not_enough_usable_sources_for_deep_article" in _block_text(block) for block in blocks)
+    assert any("Brief validation: write_brief_only" in _block_text(block) for block in blocks)
+
+
+def test_blocks_include_ai_review_when_available():
+    article, _, _, bundle, validation, llm, _ = _context()
+    bundle["ai_review"] = {
+        "publish_readiness": "needs_edit",
+        "reviewer_mode": "deterministic",
+        "recommended_editor_action": "Send to editor with highlighted issues or rewrite before review.",
+        "scores": {
+            "grounding": 70,
+            "depth": 65,
+            "readability": 80,
+            "headline_quality": 85,
+            "financial_safety": 90,
+            "source_usefulness": 75,
+        },
+        "unsupported_claims": ["Unknown source URL"],
+        "overstatements": [],
+        "missing_context": ["Missing source gaps."],
+        "issues": [{"severity": "medium", "issue_type": "unsupported_claim", "description": "Unknown source URL"}],
+    }
+
+    blocks = NotionBlockBuilder().build_blocks(article=article, source_bundle=bundle, validation=validation, llm=llm)
+
+    assert any("Readiness: needs_edit" in _block_text(block) for block in blocks)
+    assert any("grounding=70" in _block_text(block) for block in blocks)
+    assert any("Unsupported claim: Unknown source URL" in _block_text(block) for block in blocks)
+    assert any("Issue: medium - unsupported_claim" in _block_text(block) for block in blocks)
+
+
+def test_blocks_include_article_quality_report_when_available():
+    article, _, _, bundle, validation, llm, _ = _context()
+    bundle["article_quality_report"] = {
+        "final_recommended_status": "needs_edit",
+        "editor_ready_score": 68,
+        "source_count": 2,
+        "usable_source_count": 1,
+        "body_length": 900,
+        "faq_count": 1,
+        "has_market_context": True,
+        "has_risk_disclaimer": True,
+        "has_source_attribution": True,
+        "headline_risk_level": "medium",
+        "financial_advice_detected": False,
+        "grounded_claim_ratio": 0.8,
+        "blocking_issues": [],
+        "warnings": ["source_quality: write_brief_only"],
+    }
+
+    blocks = NotionBlockBuilder().build_blocks(article=article, source_bundle=bundle, validation=validation, llm=llm)
+
+    assert any("Final status: needs_edit" in _block_text(block) for block in blocks)
+    assert any("Editor ready score: 68" in _block_text(block) for block in blocks)
+    assert any("Warning: source_quality: write_brief_only" in _block_text(block) for block in blocks)
 
 
 def test_long_body_is_chunked():

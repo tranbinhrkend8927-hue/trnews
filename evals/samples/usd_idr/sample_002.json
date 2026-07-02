@@ -1,0 +1,31 @@
+{
+  "id": "usd_idr_002",
+  "market_id": "usd_idr_id",
+  "language": "id",
+  "description": "Weak-source USD/IDR sample that should be downgraded to market_brief.",
+  "source_bundle": {
+    "symbol": "USDIDR",
+    "sources": [
+      {
+        "source_id": "tv-weak-001",
+        "provider": "TradingView",
+        "title": "USD/IDR bergerak tipis",
+        "url": "https://example.com/usdidr-weak-1",
+        "content": "Pasar memantau rupiah."
+      }
+    ],
+    "source_quality_report": {
+      "source_count": 1,
+      "usable_source_count": 1,
+      "overall_source_quality": "weak",
+      "recommended_action": "write_brief_only",
+      "source_gaps": ["not_enough_usable_sources_for_deep_article"]
+    }
+  },
+  "expected": {
+    "content_type": "market_brief",
+    "must_include_sections": ["Ikhtisar singkat", "Batasan informasi", "Sumber", "Catatan risiko"],
+    "forbidden_phrases": ["analisis mendalam", "beli sekarang", "jual sekarang", "pasti naik", "pasti turun"],
+    "minimum_source_count": 1
+  }
+}

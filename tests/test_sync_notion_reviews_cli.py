@@ -57,6 +57,7 @@ def test_dry_run_success_does_not_write_store(monkeypatch, tmp_path, capsys):
 def test_sync_success_writes_feedback(monkeypatch, tmp_path, capsys):
     path = tmp_path / "feedback.jsonl"
     install(monkeypatch, write_feedback=True)
+    monkeypatch.setenv("ENABLE_NOTION_FEEDBACK_SYNC", "1")
 
     exit_code = sync_notion_reviews.sync_notion_reviews_command(["--target", "notion_articles_id", "--feedback-store-path", str(path)])
 
@@ -64,8 +65,34 @@ def test_sync_success_writes_feedback(monkeypatch, tmp_path, capsys):
     assert JsonlReviewFeedbackStore(str(path)).list_feedback()[0].content_job_key == "job-1"
 
 
+def test_sync_write_is_disabled_by_default(monkeypatch, tmp_path, capsys):
+    path = tmp_path / "feedback.jsonl"
+    install(monkeypatch, write_feedback=True)
+    monkeypatch.delenv("ENABLE_NOTION_FEEDBACK_SYNC", raising=False)
+
+    exit_code = sync_notion_reviews.sync_notion_reviews_command(["--target", "notion_articles_id", "--feedback-store-path", str(path)])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 2
+    assert payload["status"] == "NOTION_REVIEW_SYNC_DISABLED"
+    assert JsonlReviewFeedbackStore(str(path)).list_feedback() == []
+    assert FakeSyncer.calls == []
+
+
+def test_sync_write_can_be_forced_without_env(monkeypatch, tmp_path, capsys):
+    path = tmp_path / "feedback.jsonl"
+    install(monkeypatch, write_feedback=True)
+    monkeypatch.delenv("ENABLE_NOTION_FEEDBACK_SYNC", raising=False)
+
+    exit_code = sync_notion_reviews.sync_notion_reviews_command(["--target", "notion_articles_id", "--feedback-store-path", str(path), "--force"])
+
+    assert exit_code == 0
+    assert JsonlReviewFeedbackStore(str(path)).list_feedback()[0].content_job_key == "job-1"
+
+
 def test_query_failure_exit_code_1(monkeypatch, tmp_path, capsys):
     install(monkeypatch, result=NotionReviewSyncResult(success=False, target_name="notion_articles_id", errors=[{"type": "notion_query_failed"}]))
+    monkeypatch.setenv("ENABLE_NOTION_FEEDBACK_SYNC", "1")
 
     exit_code = sync_notion_reviews.sync_notion_reviews_command(["--target", "notion_articles_id", "--feedback-store-path", str(tmp_path / "feedback.jsonl")])
     payload = json.loads(capsys.readouterr().out)
@@ -76,6 +103,7 @@ def test_query_failure_exit_code_1(monkeypatch, tmp_path, capsys):
 
 def test_output_json_status_repeatable_and_limit(monkeypatch, tmp_path, capsys):
     install(monkeypatch)
+    monkeypatch.setenv("ENABLE_NOTION_FEEDBACK_SYNC", "1")
 
     exit_code = sync_notion_reviews.sync_notion_reviews_command(
         [
@@ -114,6 +142,7 @@ def test_limit_argument_error(monkeypatch, tmp_path, capsys):
 
 def test_does_not_call_llm_or_write_notion(monkeypatch, tmp_path):
     install(monkeypatch)
+    monkeypatch.setenv("ENABLE_NOTION_FEEDBACK_SYNC", "1")
 
     exit_code = sync_notion_reviews.sync_notion_reviews_command(["--target", "notion_articles_id", "--feedback-store-path", str(tmp_path / "feedback.jsonl")])
 

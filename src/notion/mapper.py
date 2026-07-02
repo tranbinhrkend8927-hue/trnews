@@ -61,8 +61,21 @@ class NotionPropertyMapper:
             "AI Summary": _rich_text_property(parsed.summary),
             "SEO Title": _rich_text_property(parsed.seo_title),
             "SEO Description": _rich_text_property(parsed.seo_description),
+            "Search Intent": _rich_text_property(parsed.search_intent),
+            "Primary Keyword": _rich_text_property(parsed.primary_keyword),
+            "Candidate Titles": _rich_text_property("\n".join(parsed.candidate_titles)),
             "Source Count": {"number": len(parsed.sources_used)},
             "Source URLs": _rich_text_property("\n".join(source_urls)),
+            "Usable Source Count": {"number": _source_quality_field(source_bundle, "usable_source_count", 0)},
+            "Source Quality": _select(_source_quality_field(source_bundle, "overall_source_quality", "unknown")),
+            "Brief Content Type": _select(_brief_field(source_bundle, "content_type", parsed.article_type or "unknown")),
+            "Brief Confidence": _select(_brief_field(source_bundle, "confidence_level", "unknown")),
+            "AI Review Readiness": _select(_ai_review_field(source_bundle, "publish_readiness", "not_run")),
+            "AI Grounding Score": {"number": _ai_review_score(source_bundle, "grounding", 0)},
+            "AI Depth Score": {"number": _ai_review_score(source_bundle, "depth", 0)},
+            "AI Financial Safety Score": {"number": _ai_review_score(source_bundle, "financial_safety", 0)},
+            "Editor Ready Score": {"number": _quality_report_field(source_bundle, "editor_ready_score", 0)},
+            "Final Recommended Status": _select(_quality_report_field(source_bundle, "final_recommended_status", "not_run")),
             "Risk Level": _select(_risk_level(validation)),
             "Prompt Version": _rich_text_property(str(llm_data.get("prompt_version") or "")),
             "LLM Model": _rich_text_property(str(llm_data.get("model") or "")),
@@ -88,6 +101,14 @@ class NotionBlockBuilder:
             _paragraph("AI-generated draft for human review. Do not publish without approval."),
             _heading(2, "AI Summary"),
             _paragraph(parsed.summary),
+            _heading(2, "Editorial Brief"),
+            *_editorial_brief_blocks(source_bundle, parsed),
+            _heading(2, "Source Quality"),
+            *_source_quality_blocks(source_bundle),
+            _heading(2, "AI Review"),
+            *_ai_review_blocks(source_bundle),
+            _heading(2, "Article Quality Report"),
+            *_article_quality_report_blocks(source_bundle),
             _heading(2, "Article Body"),
         ]
         for chunk in chunk_text(parsed.body):
@@ -114,6 +135,8 @@ class NotionBlockBuilder:
             [
                 _heading(2, "Risk Disclaimer"),
                 _paragraph(parsed.risk_disclaimer),
+                _heading(2, "Editor Notes"),
+                *_editor_note_blocks(parsed),
                 _heading(2, "Validation Results"),
             ]
         )
@@ -159,6 +182,185 @@ def _risk_level(validation: dict | None) -> str:
     if any(issue.get("severity") == "warning" for result in validation.values() for issue in result.get("issues", [])):
         return "medium"
     return "low"
+
+
+def _source_quality_blocks(source_bundle: dict | None) -> list[dict]:
+    bundle = source_bundle if isinstance(source_bundle, dict) else {}
+    report = bundle.get("source_quality_report")
+    if not isinstance(report, dict):
+        return [_paragraph("No source quality report available.")]
+    blocks = [
+        _bulleted_item(f"Source quality: {report.get('overall_source_quality', 'unknown')}"),
+        _bulleted_item(f"Usable sources: {report.get('usable_source_count', 0)} / {report.get('source_count', 0)}"),
+        _bulleted_item(f"Avg text length: {report.get('average_text_length', 0)}"),
+        _bulleted_item(f"Extraction success rate: {report.get('extraction_success_rate', 0)}"),
+        _bulleted_item(f"Recommended action: {report.get('recommended_action', 'unknown')}"),
+    ]
+    for reason in report.get("reasons") or []:
+        blocks.append(_bulleted_item(f"Reason: {reason}"))
+    for gap in report.get("source_gaps") or []:
+        blocks.append(_bulleted_item(f"Gap: {gap}"))
+    return blocks
+
+
+def _source_quality_field(source_bundle: dict | None, field: str, default: Any = None) -> Any:
+    bundle = source_bundle if isinstance(source_bundle, dict) else {}
+    report = bundle.get("source_quality_report")
+    if isinstance(report, dict):
+        return report.get(field, default)
+    return default
+
+
+def _brief_field(source_bundle: dict | None, field: str, default: Any = None) -> Any:
+    bundle = source_bundle if isinstance(source_bundle, dict) else {}
+    brief = bundle.get("editorial_brief")
+    if isinstance(brief, dict):
+        return brief.get(field, default)
+    return default
+
+
+def _editorial_brief_blocks(source_bundle: dict | None, article) -> list[dict]:
+    bundle = source_bundle if isinstance(source_bundle, dict) else {}
+    brief = bundle.get("editorial_brief")
+    if not isinstance(brief, dict):
+        return [_paragraph(_editorial_summary(article))]
+
+    blocks = [
+        _bulleted_item(f"Content type: {brief.get('content_type', 'unknown')}"),
+        _bulleted_item(f"Confidence: {brief.get('confidence_level', 'unknown')}"),
+        _bulleted_item(f"Primary angle: {brief.get('primary_angle', '')}"),
+        _bulleted_item(f"Event summary: {brief.get('event_summary', '')}"),
+        _bulleted_item(f"Why it matters: {brief.get('why_it_matters', '')}"),
+        _bulleted_item(f"Market context: {brief.get('market_context', '')}"),
+        _bulleted_item(f"Target reader: {brief.get('target_reader', '')}"),
+    ]
+    blocks.extend(_list_value_blocks("Reader question", brief.get("reader_questions")))
+    blocks.extend(_list_value_blocks("Must cover", brief.get("must_cover")))
+    blocks.extend(_list_value_blocks("Avoid claim", brief.get("avoid_claims")))
+    blocks.extend(_list_value_blocks("Source gap", brief.get("source_gaps")))
+    blocks.extend(_list_value_blocks("Recommended section", brief.get("recommended_structure")))
+
+    validation = bundle.get("brief_validation")
+    if isinstance(validation, dict):
+        blocks.append(_bulleted_item(f"Brief validation: {validation.get('recommended_status', 'unknown')}"))
+        for issue in validation.get("issues") or []:
+            if isinstance(issue, dict):
+                blocks.append(_bulleted_item(f"Brief issue: {issue.get('severity')} - {issue.get('code')} - {issue.get('message')}"))
+    return blocks
+
+
+def _ai_review_field(source_bundle: dict | None, field: str, default: Any = None) -> Any:
+    bundle = source_bundle if isinstance(source_bundle, dict) else {}
+    review = bundle.get("ai_review")
+    if isinstance(review, dict):
+        return review.get(field, default)
+    return default
+
+
+def _ai_review_score(source_bundle: dict | None, field: str, default: int = 0) -> int:
+    bundle = source_bundle if isinstance(source_bundle, dict) else {}
+    review = bundle.get("ai_review")
+    scores = review.get("scores") if isinstance(review, dict) else {}
+    if isinstance(scores, dict):
+        value = scores.get(field, default)
+        return int(value or 0)
+    return default
+
+
+def _ai_review_blocks(source_bundle: dict | None) -> list[dict]:
+    bundle = source_bundle if isinstance(source_bundle, dict) else {}
+    review = bundle.get("ai_review")
+    if not isinstance(review, dict):
+        return [_paragraph("AI reviewer was not run.")]
+    scores = review.get("scores") if isinstance(review.get("scores"), dict) else {}
+    blocks = [
+        _bulleted_item(f"Readiness: {review.get('publish_readiness', 'unknown')}"),
+        _bulleted_item(f"Reviewer mode: {review.get('reviewer_mode', 'unknown')}"),
+        _bulleted_item(f"Recommended editor action: {review.get('recommended_editor_action', '')}"),
+        _bulleted_item(
+            "Scores: "
+            + ", ".join(
+                [
+                    f"grounding={scores.get('grounding', 0)}",
+                    f"depth={scores.get('depth', 0)}",
+                    f"readability={scores.get('readability', 0)}",
+                    f"headline={scores.get('headline_quality', 0)}",
+                    f"financial_safety={scores.get('financial_safety', 0)}",
+                    f"source_usefulness={scores.get('source_usefulness', 0)}",
+                ]
+            )
+        ),
+    ]
+    blocks.extend(_list_value_blocks("Unsupported claim", review.get("unsupported_claims")))
+    blocks.extend(_list_value_blocks("Overstatement", review.get("overstatements")))
+    blocks.extend(_list_value_blocks("Missing context", review.get("missing_context")))
+    for issue in review.get("issues") or []:
+        if isinstance(issue, dict):
+            blocks.append(_bulleted_item(f"Issue: {issue.get('severity')} - {issue.get('issue_type')} - {issue.get('description')}"))
+    return blocks
+
+
+def _quality_report_field(source_bundle: dict | None, field: str, default: Any = None) -> Any:
+    bundle = source_bundle if isinstance(source_bundle, dict) else {}
+    report = bundle.get("article_quality_report")
+    if isinstance(report, dict):
+        return report.get(field, default)
+    return default
+
+
+def _article_quality_report_blocks(source_bundle: dict | None) -> list[dict]:
+    bundle = source_bundle if isinstance(source_bundle, dict) else {}
+    report = bundle.get("article_quality_report")
+    if not isinstance(report, dict):
+        return [_paragraph("Article quality report was not generated.")]
+    blocks = [
+        _bulleted_item(f"Final status: {report.get('final_recommended_status', 'unknown')}"),
+        _bulleted_item(f"Editor ready score: {report.get('editor_ready_score', 0)}"),
+        _bulleted_item(f"Sources: usable={report.get('usable_source_count', 0)} / total={report.get('source_count', 0)}"),
+        _bulleted_item(f"Body length: {report.get('body_length', 0)}"),
+        _bulleted_item(f"FAQ count: {report.get('faq_count', 0)}"),
+        _bulleted_item(f"Market context: {bool(report.get('has_market_context'))}"),
+        _bulleted_item(f"Risk disclaimer: {bool(report.get('has_risk_disclaimer'))}"),
+        _bulleted_item(f"Source attribution: {bool(report.get('has_source_attribution'))}"),
+        _bulleted_item(f"Headline risk: {report.get('headline_risk_level', 'unknown')}"),
+        _bulleted_item(f"Financial advice detected: {bool(report.get('financial_advice_detected'))}"),
+    ]
+    if report.get("grounded_claim_ratio") is not None:
+        blocks.append(_bulleted_item(f"Grounded claim ratio: {report.get('grounded_claim_ratio')}"))
+    blocks.extend(_list_value_blocks("Blocking issue", report.get("blocking_issues")))
+    blocks.extend(_list_value_blocks("Warning", report.get("warnings")))
+    return blocks
+
+
+def _list_value_blocks(label: str, values: Any) -> list[dict]:
+    if not isinstance(values, list):
+        return []
+    return [_bulleted_item(f"{label}: {value}") for value in values if value]
+
+
+def _editorial_summary(article) -> str:
+    parts = []
+    if article.search_intent:
+        parts.append(f"Search intent: {article.search_intent}")
+    if article.primary_keyword:
+        parts.append(f"Primary keyword: {article.primary_keyword}")
+    if article.secondary_keywords:
+        parts.append("Secondary keywords: " + ", ".join(article.secondary_keywords))
+    if article.editorial_angle:
+        parts.append(f"Editorial angle: {article.editorial_angle}")
+    if article.key_takeaways:
+        parts.append("Key takeaways:\n" + "\n".join(f"- {item}" for item in article.key_takeaways))
+    if article.candidate_titles:
+        parts.append("Candidate titles:\n" + "\n".join(f"- {item}" for item in article.candidate_titles))
+    if article.evergreen_context:
+        parts.append(f"Evergreen context: {article.evergreen_context}")
+    return "\n\n".join(parts) if parts else "No editorial brief metadata."
+
+
+def _editor_note_blocks(article) -> list[dict]:
+    if not article.editor_notes:
+        return [_paragraph("No editor notes.")]
+    return [_bulleted_item(f"{note.type}: {note.text}") for note in article.editor_notes]
 
 
 def _title(text: str) -> dict:

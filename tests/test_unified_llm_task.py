@@ -96,6 +96,63 @@ def _article_json():
     )
 
 
+def _ai_review_json():
+    return json.dumps(
+        {
+            "publish_readiness": "needs_edit",
+            "scores": {
+                "grounding": 70,
+                "depth": 68,
+                "readability": 82,
+                "headline_quality": 80,
+                "financial_safety": 90,
+                "source_usefulness": 75,
+            },
+            "issues": [],
+            "unsupported_claims": [],
+            "overstatements": [],
+            "missing_context": ["Needs more context."],
+            "rewrite_suggestions": ["Add source-backed context."],
+            "recommended_editor_action": "Send to editor with highlighted issues.",
+        },
+        ensure_ascii=False,
+    )
+
+
+def _review_input_data():
+    return {
+        "language": "id",
+        "language_profile": {"language": "id"},
+        "article": {
+            "title": "USD/IDR bergerak setelah komentar bank sentral",
+            "summary": "Ringkasan sumber.",
+            "body": "Ikhtisar peristiwa\nBerita bersumber.\n\nSumber\nhttps://example.com/source-1\n\nCatatan risiko\nRisiko.",
+            "sources_used": [{"source_id": "source-1", "url": "https://example.com/source-1"}],
+        },
+        "editorial_brief": {
+            "event_summary": "USD/IDR source event.",
+            "primary_angle": "Explain source event without trading advice.",
+            "content_type": "deep_article",
+            "confidence_level": "high",
+        },
+        "source_bundle": {
+            "sources": [
+                {
+                    "source_id": "source-1",
+                    "title": "Bank central update moves FX market",
+                    "url": "https://example.com/source-1",
+                }
+            ],
+        },
+        "source_quality_report": {
+            "overall_source_quality": "strong",
+            "recommended_action": "write_article",
+            "usable_source_count": 2,
+        },
+        "validation": {"article_schema": {"passed": True, "issues": []}},
+    }
+
+
 def _success_response(content=None):
     return FakeResponse(
         200,
@@ -128,6 +185,8 @@ def test_model_policies_hold_task_temperatures(monkeypatch):
     assert get_model_policy("fx_article_id").temperature == 0.35
     assert get_model_policy("article_draft").temperature == 0.35
     assert get_model_policy("article_draft").task_name == "article_draft"
+    assert get_model_policy("article_review").temperature == 0.1
+    assert get_model_policy("article_review").json_schema["required"][0] == "publish_readiness"
     assert get_model_policy("japan_fx_content").task_name == "fx_article_id"
     assert get_model_policy("rss_summary").temperature == 0.2
     assert get_model_policy("market_alert").temperature == 0.1
@@ -157,6 +216,41 @@ def test_run_llm_task_uses_policy_and_allowed_overrides(monkeypatch):
     assert payload["max_tokens"] == 321
     assert payload["top_p"] == 0.7
     assert payload["response_format"]["type"] == "json_schema"
+
+
+def test_run_llm_task_supports_article_review(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "unit-key")
+    monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
+    session = FakeSession([_success_response(_ai_review_json())])
+    client = OpenAICompatibleClient(session=session)
+
+    result = run_llm_task(
+        "article_review",
+        _review_input_data(),
+        overrides={"temperature": 0.05, "max_tokens": 456},
+        client=client,
+    )
+
+    assert result["success"] is True
+    assert result["task_name"] == "article_review"
+    assert result["prompt_version"] == "article_review@2026-07-02+id"
+    assert result["output"]["publish_readiness"] == "needs_edit"
+    payload = session.calls[0]["json"]
+    assert payload["temperature"] == 0.05
+    assert payload["max_tokens"] == 456
+    assert payload["response_format"]["json_schema"]["name"] == "article_review"
+
+
+def test_run_llm_task_article_review_schema_failure(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "unit-key")
+    monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
+    session = FakeSession([_success_response(json.dumps({"publish_readiness": "ready"}))])
+    client = OpenAICompatibleClient(session=session)
+
+    with pytest.raises(Exception) as exc_info:
+        run_llm_task("article_review", _review_input_data(), client=client)
+
+    assert getattr(exc_info.value, "error_type", "") == "schema_validation_error"
 
 
 def test_run_llm_task_rejects_blocked_overrides(monkeypatch):

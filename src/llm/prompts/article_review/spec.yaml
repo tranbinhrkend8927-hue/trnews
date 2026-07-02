@@ -1,0 +1,12 @@
+{
+  "name": "article_review",
+  "version": "article_review@2026-07-02",
+  "description": "Review an FX/finance ArticleDraft against sources, editorial brief, quality report, and financial safety rules.",
+  "output_schema": "ai_review_v1",
+  "input_required": [
+    "article",
+    "editorial_brief",
+    "source_bundle",
+    "source_quality_report"
+  ]
+}

@@ -8,6 +8,13 @@ from src.review.feedback import ReviewFeedback, create_review_feedback
 DEFAULT_PROPERTY_MAP = {
     "status": "Status",
     "review_notes": "Review Notes",
+    "editor_notes": "Editor Notes",
+    "editor_score": "Editor Score",
+    "rejection_reason": "Rejection Reason",
+    "edited_headline": "Edited Headline",
+    "edited_summary": "Edited Summary",
+    "final_publish_decision": "Final Publish Decision",
+    "reviewed_at": "Reviewed At",
     "quality_score": "Quality Score",
     "factuality_score": "Factuality Score",
     "language_score": "Language Score",
@@ -147,6 +154,7 @@ def map_notion_status_to_review_status(status: str | None) -> str | None:
         "approved": "approved",
         "published": "published",
         "rejected": "rejected",
+        "needs edit": "needs_edit",
         "needs rewrite": "needs_rewrite",
         "needs source fix": "needs_source_fix",
         "needs compliance fix": "needs_compliance_fix",
@@ -172,7 +180,9 @@ def notion_page_to_review_feedback(
         return None
 
     metadata = {"notion_sync": True, "warnings": []}
+    editor_score = _safe_score(extract_number(get_property(properties, prop_map["editor_score"])), "editor_score", metadata)
     scores = {
+        "editor_score": editor_score,
         "quality_score": _safe_score(extract_number(get_property(properties, prop_map["quality_score"])), "quality_score", metadata),
         "factuality_score": _safe_score(extract_number(get_property(properties, prop_map["factuality_score"])), "factuality_score", metadata),
         "language_score": _safe_score(extract_number(get_property(properties, prop_map["language_score"])), "language_score", metadata),
@@ -193,7 +203,12 @@ def notion_page_to_review_feedback(
         model=extract_rich_text(get_property(properties, prop_map["model"])),
         prompt_version=extract_rich_text(get_property(properties, prop_map["prompt_version"])),
         reviewer=reviewer,
-        notes=extract_rich_text(get_property(properties, prop_map["review_notes"])),
+        notes=_first_text_property(properties, [prop_map["editor_notes"], prop_map["review_notes"]]),
+        rejection_reason=extract_rich_text(get_property(properties, prop_map["rejection_reason"])),
+        edited_headline=extract_rich_text(get_property(properties, prop_map["edited_headline"])),
+        edited_summary=extract_rich_text(get_property(properties, prop_map["edited_summary"])),
+        final_publish_decision=extract_select(get_property(properties, prop_map["final_publish_decision"])) or extract_rich_text(get_property(properties, prop_map["final_publish_decision"])),
+        reviewed_at=extract_date(get_property(properties, prop_map["reviewed_at"])),
         metadata=metadata,
         **scores,
     )
@@ -218,6 +233,14 @@ def _safe_score(value, field_name: str, metadata: dict) -> int | None:
         metadata["warnings"].append({"type": "invalid_review_score", "field": field_name, "value": value})
         return None
     return score
+
+
+def _first_text_property(properties: dict, names: list[str]) -> str | None:
+    for name in names:
+        value = extract_rich_text(get_property(properties, name))
+        if value:
+            return value
+    return None
 
 
 def _status_filtered(review_status: str | None, status_filter: list[str] | None) -> bool:

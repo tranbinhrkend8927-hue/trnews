@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
 from src.config.loader import load_config_registry
@@ -20,6 +21,7 @@ def sync_notion_reviews_command(args: list[str] | None = None) -> int:
     parser.add_argument("--page-size", type=int, default=50)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--force", action="store_true", help="Write feedback even when ENABLE_NOTION_FEEDBACK_SYNC is not enabled.")
     namespace = parser.parse_args(args)
 
     if namespace.page_size <= 0:
@@ -27,6 +29,22 @@ def sync_notion_reviews_command(args: list[str] | None = None) -> int:
         return 2
     if namespace.limit is not None and namespace.limit <= 0:
         print(json.dumps({"success": False, "status": "NOTION_REVIEW_SYNC_ARGUMENT_ERROR", "errors": [{"message": "limit must be greater than 0."}]}, indent=2))
+        return 2
+    if not namespace.dry_run and not namespace.force and not _feedback_sync_enabled():
+        print(
+            json.dumps(
+                {
+                    "success": False,
+                    "status": "NOTION_REVIEW_SYNC_DISABLED",
+                    "errors": [
+                        {
+                            "message": "Set ENABLE_NOTION_FEEDBACK_SYNC=1 or pass --force to write Notion review feedback.",
+                        }
+                    ],
+                },
+                indent=2,
+            )
+        )
         return 2
 
     registry = load_config_registry()
@@ -56,6 +74,10 @@ def sync_notion_reviews_command(args: list[str] | None = None) -> int:
 
 def main() -> int:
     return sync_notion_reviews_command()
+
+
+def _feedback_sync_enabled() -> bool:
+    return os.getenv("ENABLE_NOTION_FEEDBACK_SYNC", "0").strip().lower() in ("1", "true", "yes")
 
 
 if __name__ == "__main__":

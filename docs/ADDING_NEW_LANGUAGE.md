@@ -1,7 +1,7 @@
 # Adding A New Language
 
 1. Create `config/languages/<lang>.yaml`.
-2. Add writing rules, required sections, disclaimer, SEO settings, and Notion field overrides if needed.
+2. Add writing rules, required sections, disclaimer, SEO settings, quality thresholds, and Notion field overrides if needed.
 3. Create `src/llm/prompts/article_draft/<lang>.system.md`.
 4. Confirm `src/llm/prompts/article_draft/spec.yaml` still applies.
 5. Add or reuse an LLM profile in `config/llm_profiles.yaml`.

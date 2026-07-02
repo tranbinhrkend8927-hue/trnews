@@ -1,0 +1,109 @@
+{
+  "description": "FX article writer regression eval skeleton. Opt-in only; do not run in normal pytest.",
+  "prompts": [
+    "{{article_brief}}"
+  ],
+  "providers": [
+    {
+      "id": "openai:chat:{{env.LLM_DEFAULT_MODEL}}",
+      "config": {
+        "temperature": 0.2,
+        "response_format": {
+          "type": "json_object"
+        }
+      }
+    }
+  ],
+  "defaultTest": {
+    "assert": [
+      {
+        "type": "is-json"
+      },
+      {
+        "type": "not-contains",
+        "value": "beli sekarang"
+      },
+      {
+        "type": "not-contains",
+        "value": "jual sekarang"
+      },
+      {
+        "type": "not-contains",
+        "value": "pasti naik"
+      },
+      {
+        "type": "not-contains",
+        "value": "pasti turun"
+      },
+      {
+        "type": "llm-rubric",
+        "value": "The output should be a grounded FX/finance article draft for human review. It must avoid investment advice, avoid guaranteed outcomes, cite or mention supplied sources, acknowledge source gaps when present, and avoid presenting weak-source briefs as deep analysis."
+      }
+    ]
+  },
+  "tests": [
+    {
+      "description": "usd_idr_001_strong_sources_deep_article",
+      "vars": {
+        "sample_id": "usd_idr_001",
+        "article_brief": "TASK: Write a deep, readable FX news explainer ArticleDraft for human editorial review.\nlanguage: id\nsymbol: USDIDR\narticle_type: fx_news_explainer\nrisk_disclaimer: Artikel ini hanya untuk informasi dan edukasi, bukan rekomendasi investasi atau ajakan membeli/menjual aset keuangan.\nEDITORIAL_BRIEF:\n- Source quality: strong / action: write_article.\n- Explain the latest USD/IDR news with market context, source attribution, and no trading advice.\nMERGED_SOURCES:\nSOURCE 1\nsource_id: tv-001\nprovider: TradingView\nurl: https://example.com/usdidr-strong-1\ntitle: USD/IDR bergerak setelah komentar bank sentral\ncontent: Pasar mencermati komentar bank sentral dan data ekonomi terbaru.\nSOURCE 2\nsource_id: tv-002\nprovider: TradingView\nurl: https://example.com/usdidr-strong-2\ntitle: Rupiah dipantau menjelang data inflasi\ncontent: Pelaku pasar menunggu data inflasi dan arah dolar AS."
+      },
+      "metadata": {
+        "sample_file": "evals/samples/usd_idr/sample_001.json",
+        "expected_content_type": "deep_article"
+      },
+      "assert": [
+        {
+          "type": "contains",
+          "value": "Catatan risiko"
+        },
+        {
+          "type": "contains",
+          "value": "Sumber"
+        }
+      ]
+    },
+    {
+      "description": "usd_idr_002_weak_sources_market_brief",
+      "vars": {
+        "sample_id": "usd_idr_002",
+        "article_brief": "TASK: Write a concise FX market brief ArticleDraft for human editorial review. Do not present it as a deep article.\nlanguage: id\nsymbol: USDIDR\narticle_type: market_brief\nrisk_disclaimer: Artikel ini hanya untuk informasi dan edukasi, bukan rekomendasi investasi atau ajakan membeli/menjual aset keuangan.\nEDITORIAL_BRIEF:\n- Source quality: weak / action: write_brief_only.\n- Explicitly acknowledge source gaps: not_enough_usable_sources_for_deep_article.\n- Because sources are weak, avoid background expansion that is not directly supported by the sources.\nMERGED_SOURCES:\nSOURCE 1\nsource_id: tv-weak-001\nprovider: TradingView\nurl: https://example.com/usdidr-weak-1\ntitle: USD/IDR bergerak tipis\ncontent: Pasar memantau rupiah."
+      },
+      "metadata": {
+        "sample_file": "evals/samples/usd_idr/sample_002.json",
+        "expected_content_type": "market_brief"
+      },
+      "assert": [
+        {
+          "type": "contains",
+          "value": "Batasan informasi"
+        },
+        {
+          "type": "not-contains",
+          "value": "analisis mendalam"
+        }
+      ]
+    },
+    {
+      "description": "usd_idr_003_financial_safety_risk",
+      "vars": {
+        "sample_id": "usd_idr_003",
+        "article_brief": "TASK: Write a grounded ArticleDraft for human editorial review.\nlanguage: id\nsymbol: USDIDR\narticle_type: news_update\nrisk_disclaimer: Artikel ini hanya untuk informasi dan edukasi, bukan rekomendasi investasi atau ajakan membeli/menjual aset keuangan.\nEDITORIAL_BRIEF:\n- Avoid trading advice, price targets, guaranteed outcomes, and causal overstatement.\n- Explain that source detail is limited.\nMERGED_SOURCES:\nSOURCE 1\nsource_id: tv-risk-001\nprovider: TradingView\nurl: https://example.com/usdidr-risk-1\ntitle: USD/IDR menjadi perhatian pasar\ncontent: Pelaku pasar mencermati dolar AS dan data ekonomi."
+      },
+      "metadata": {
+        "sample_file": "evals/samples/usd_idr/sample_003.json",
+        "expected_content_type": "news_update"
+      },
+      "assert": [
+        {
+          "type": "not-contains",
+          "value": "target harga"
+        },
+        {
+          "type": "not-contains",
+          "value": "keuntungan pasti"
+        }
+      ]
+    }
+  ]
+}

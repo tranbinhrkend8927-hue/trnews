@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 ReviewStatus = Literal[
     "approved",
     "rejected",
+    "needs_edit",
     "needs_rewrite",
     "needs_source_fix",
     "needs_compliance_fix",
@@ -43,6 +44,7 @@ class ReviewFeedback(BaseModel):
     review_status: ReviewStatus
     reviewer: Optional[str] = None
 
+    editor_score: Optional[int] = None
     quality_score: Optional[int] = None
     factuality_score: Optional[int] = None
     language_score: Optional[int] = None
@@ -57,10 +59,15 @@ class ReviewFeedback(BaseModel):
 
     issues: list[str] = Field(default_factory=list)
     notes: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    edited_headline: Optional[str] = None
+    edited_summary: Optional[str] = None
+    final_publish_decision: Optional[str] = None
+    reviewed_at: Optional[str] = None
 
     metadata: dict = Field(default_factory=dict)
 
-    @field_validator("quality_score", "factuality_score", "language_score", "seo_score", "compliance_score")
+    @field_validator("editor_score", "quality_score", "factuality_score", "language_score", "seo_score", "compliance_score")
     @classmethod
     def score_must_be_one_to_five(cls, value):
         if value is None:
@@ -86,6 +93,7 @@ def create_review_feedback(
     prompt_version: str | None = None,
     llm_profile: str | None = None,
     reviewer: str | None = None,
+    editor_score: int | None = None,
     quality_score: int | None = None,
     factuality_score: int | None = None,
     language_score: int | None = None,
@@ -93,6 +101,11 @@ def create_review_feedback(
     compliance_score: int | None = None,
     issues: list[str] | None = None,
     notes: str | None = None,
+    rejection_reason: str | None = None,
+    edited_headline: str | None = None,
+    edited_summary: str | None = None,
+    final_publish_decision: str | None = None,
+    reviewed_at: str | None = None,
     metadata: dict | None = None,
 ) -> ReviewFeedback:
     timestamp = _utc_now()
@@ -122,6 +135,7 @@ def create_review_feedback(
         llm_profile=llm_profile,
         review_status=review_status,
         reviewer=reviewer,
+        editor_score=editor_score,
         quality_score=quality_score,
         factuality_score=factuality_score,
         language_score=language_score,
@@ -129,6 +143,11 @@ def create_review_feedback(
         compliance_score=compliance_score,
         issues=issues or [],
         notes=notes,
+        rejection_reason=rejection_reason,
+        edited_headline=edited_headline,
+        edited_summary=edited_summary,
+        final_publish_decision=final_publish_decision,
+        reviewed_at=reviewed_at,
         metadata=metadata or {},
         **flags,
     )
@@ -142,7 +161,9 @@ def _flags_for_status(review_status: str) -> dict:
         "compliance_fix_required": False,
         "language_fix_required": False,
     }
-    if review_status == "needs_rewrite":
+    if review_status == "needs_edit":
+        flags["edit_required"] = True
+    elif review_status == "needs_rewrite":
         flags["edit_required"] = True
         flags["rewrite_required"] = True
     elif review_status == "needs_source_fix":

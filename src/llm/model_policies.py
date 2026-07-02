@@ -4,7 +4,7 @@ import os
 import re
 from typing import Any, Dict, List
 
-from news_pipeline.llm_schemas import LLM_ARTICLE_DRAFT_SCHEMA
+from news_pipeline.llm_schemas import LLM_AI_REVIEW_SCHEMA, LLM_ARTICLE_DRAFT_SCHEMA
 
 from .types import LLMConfigError, LLMTaskPolicy
 
@@ -108,6 +108,13 @@ def get_model_policy(task_name: str, overrides: Dict[str, Any] = None) -> LLMTas
             json_output=True,
             json_schema=LLM_ARTICLE_DRAFT_SCHEMA,
         )
+    elif canonical == "article_review":
+        policy = _base_policy(
+            canonical,
+            temperature=0.1,
+            json_output=True,
+            json_schema=LLM_AI_REVIEW_SCHEMA,
+        )
     elif canonical == "rss_summary":
         policy = _base_policy(canonical, temperature=0.2, json_output=True)
     elif canonical == "market_alert":
@@ -118,6 +125,6 @@ def get_model_policy(task_name: str, overrides: Dict[str, Any] = None) -> LLMTas
         raise LLMConfigError(
             f"Unknown LLM task: {task_name}",
             task_name=task_name,
-            details={"known_tasks": ["article_draft", "fx_article_id", "rss_summary", "market_alert", "json_extract"]},
+            details={"known_tasks": ["article_draft", "article_review", "fx_article_id", "rss_summary", "market_alert", "json_extract"]},
         )
     return policy.with_overrides(dict(overrides or {}))

@@ -1,7 +1,7 @@
 import json
 
 from news_pipeline.llm_gateway import LLMGateway, MockLLMProvider
-from news_pipeline.llm_schemas import BASIC_JSON_SCHEMA, validate_json_schema
+from news_pipeline.llm_schemas import BASIC_JSON_SCHEMA, LLM_AI_REVIEW_SCHEMA, validate_json_schema
 
 
 def _messages():
@@ -21,6 +21,45 @@ def test_lightweight_schema_validation_supports_required_and_types():
     assert missing["errors"][0]["path"] == "message"
     assert wrong_type["valid"] is False
     assert wrong_type["errors"][0]["message"] == "Expected string, got integer"
+
+
+def test_ai_review_schema_requires_scores():
+    valid = validate_json_schema(
+        {
+            "publish_readiness": "needs_edit",
+            "scores": {
+                "grounding": 70,
+                "depth": 70,
+                "readability": 80,
+                "headline_quality": 80,
+                "financial_safety": 90,
+                "source_usefulness": 75,
+            },
+            "issues": [],
+            "unsupported_claims": [],
+            "overstatements": [],
+            "missing_context": [],
+            "rewrite_suggestions": [],
+            "recommended_editor_action": "Send to editor.",
+        },
+        LLM_AI_REVIEW_SCHEMA,
+    )
+    missing_scores = validate_json_schema(
+        {
+            "publish_readiness": "needs_edit",
+            "issues": [],
+            "unsupported_claims": [],
+            "overstatements": [],
+            "missing_context": [],
+            "rewrite_suggestions": [],
+            "recommended_editor_action": "Send to editor.",
+        },
+        LLM_AI_REVIEW_SCHEMA,
+    )
+
+    assert valid == {"valid": True, "errors": []}
+    assert missing_scores["valid"] is False
+    assert missing_scores["errors"][0]["path"] == "scores"
 
 
 def test_mock_provider_success_returns_json():

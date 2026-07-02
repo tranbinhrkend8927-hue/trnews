@@ -34,7 +34,15 @@ Defines Notion parent targets.
 
 ## `languages/*.yaml`
 
-Defines language-specific writing rules, required sections, disclaimer text, SEO settings, slug rules, and optional Notion property names.
+Defines language-specific writing rules, required sections, disclaimer text, SEO settings, quality gates, slug rules, and optional Notion property names.
+
+For deep FX articles, `quality` can tune review warnings:
+
+- `min_body_length`: minimum body length before the draft is flagged as thin.
+- `min_faq_count`: minimum FAQ items expected for the language.
+- `min_key_takeaways`: minimum reader takeaways expected for the draft.
+
+These checks create review warnings by default. Schema, grounding, language, financial safety, and Notion exportability errors still block export.
 
 ## Environment Variables
 

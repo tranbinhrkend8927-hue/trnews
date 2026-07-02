@@ -49,6 +49,74 @@ LLM_ARTICLE_DRAFT_SCHEMA = {
         "risk_disclaimer": {"type": "string"},
         "uncertain_claims": {"type": "array"},
         "language": {"type": "string"},
+        "market": {"type": "string"},
+        "symbol": {"type": "string"},
+        "article_type": {"type": "string"},
+        "region": {"type": "string"},
+        "search_intent": {"type": "string"},
+        "primary_keyword": {"type": "string"},
+        "secondary_keywords": {"type": "array"},
+        "candidate_titles": {"type": "array"},
+        "editorial_angle": {"type": "string"},
+        "key_takeaways": {"type": "array"},
+        "evergreen_context": {"type": "string"},
+        "editor_notes": {"type": "array"},
+    },
+}
+
+
+LLM_AI_REVIEW_SCHEMA = {
+    "type": "object",
+    "required": [
+        "publish_readiness",
+        "scores",
+        "issues",
+        "unsupported_claims",
+        "overstatements",
+        "missing_context",
+        "rewrite_suggestions",
+        "recommended_editor_action",
+    ],
+    "properties": {
+        "publish_readiness": {"type": "string"},
+        "scores": {
+            "type": "object",
+            "required": [
+                "grounding",
+                "depth",
+                "readability",
+                "headline_quality",
+                "financial_safety",
+                "source_usefulness",
+            ],
+            "properties": {
+                "grounding": {"type": "integer"},
+                "depth": {"type": "integer"},
+                "readability": {"type": "integer"},
+                "headline_quality": {"type": "integer"},
+                "financial_safety": {"type": "integer"},
+                "source_usefulness": {"type": "integer"},
+            },
+        },
+        "issues": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["issue_type", "severity", "description"],
+                "properties": {
+                    "issue_type": {"type": "string"},
+                    "severity": {"type": "string"},
+                    "location": {"type": "string"},
+                    "description": {"type": "string"},
+                    "suggested_fix": {"type": "string"},
+                },
+            },
+        },
+        "unsupported_claims": {"type": "array"},
+        "overstatements": {"type": "array"},
+        "missing_context": {"type": "array"},
+        "rewrite_suggestions": {"type": "array"},
+        "recommended_editor_action": {"type": "string"},
     },
 }
 

@@ -212,6 +212,7 @@ class LanguageConfig:
     seo: dict[str, Any]
     slug: dict[str, Any]
     notion: dict[str, Any]
+    quality: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "LanguageConfig":
