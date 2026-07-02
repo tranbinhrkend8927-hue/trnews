@@ -81,7 +81,8 @@ python -m src.jobs.run_batch --enabled-only --dry-run --include-notion-preview
 ## 7. Review Sync And Reports
 
 ```bash
-python -m src.jobs.sync_notion_reviews --target notion_articles_id --feedback-store-path .runs/review_feedback.jsonl
+python -m src.jobs.sync_notion_reviews --target notion_articles_id --feedback-store-path .runs/review_feedback.jsonl --dry-run
+ENABLE_NOTION_FEEDBACK_SYNC=1 python -m src.jobs.sync_notion_reviews --target notion_articles_id --feedback-store-path .runs/review_feedback.jsonl
 python -m src.jobs.report_runs --event-store-path .runs/events.jsonl
 python -m src.jobs.report_feedback --feedback-store-path .runs/review_feedback.jsonl
 ```

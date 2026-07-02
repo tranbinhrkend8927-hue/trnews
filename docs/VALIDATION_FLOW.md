@@ -246,6 +246,15 @@ Sync Notion review feedback read-only:
 ```bash
 .venv/bin/python -m src.jobs.sync_notion_reviews \
   --target notion_articles_id \
+  --feedback-store-path .runs/review_feedback.jsonl \
+  --dry-run
+```
+
+Write Notion review feedback after checking the dry-run payload:
+
+```bash
+ENABLE_NOTION_FEEDBACK_SYNC=1 .venv/bin/python -m src.jobs.sync_notion_reviews \
+  --target notion_articles_id \
   --feedback-store-path .runs/review_feedback.jsonl
 ```
 

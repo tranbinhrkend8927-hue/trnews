@@ -15,7 +15,8 @@ python -m src.jobs.run_batch --enabled-only --dry-run
 python -m src.jobs.run_batch --enabled-only --use-real-llm --upsert-notion --yes
 python -m src.jobs.retry_failed --job-store-path .runs/content_jobs.jsonl
 python -m src.jobs.report_runs --event-store-path .runs/events.jsonl
-python -m src.jobs.sync_notion_reviews --target notion_articles_id --feedback-store-path .runs/review_feedback.jsonl
+python -m src.jobs.sync_notion_reviews --target notion_articles_id --feedback-store-path .runs/review_feedback.jsonl --dry-run
+ENABLE_NOTION_FEEDBACK_SYNC=1 python -m src.jobs.sync_notion_reviews --target notion_articles_id --feedback-store-path .runs/review_feedback.jsonl
 python -m src.jobs.report_feedback --feedback-store-path .runs/review_feedback.jsonl
 ```
 
@@ -23,6 +24,7 @@ python -m src.jobs.report_feedback --feedback-store-path .runs/review_feedback.j
 
 - Default commands do not call a real LLM.
 - Default commands do not write Notion.
+- Notion review feedback sync only writes when `ENABLE_NOTION_FEEDBACK_SYNC=1` or `--force` is set.
 - `--export-notion` and `--upsert-notion` require `--yes`.
 - Prefer `--upsert-notion --yes` over `--export-notion --yes` for repeated runs.
 
