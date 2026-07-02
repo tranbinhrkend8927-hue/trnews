@@ -11,6 +11,7 @@ This document records the current implementation baseline after Phase 1-5. It is
 | Phase 3 AI Reviewer | implemented | off by default |
 | Phase 4 ArticleQualityReport + Promptfoo skeleton | implemented | off by default |
 | Phase 5 Notion Feedback Loop | implemented | feedback sync off by default |
+| Optional Rewrite Interface | implemented as plan-only skeleton | off by default |
 | Phase 6 Langfuse / datasets / heavy frameworks | not started | no impact |
 
 ## Feature Flags
@@ -25,6 +26,7 @@ ENABLE_AI_REVIEWER=0
 ENABLE_LLM_AI_REVIEWER=0
 ENABLE_QUALITY_REPORT=0
 ENABLE_PROMPTFOO_EVALS=0
+ENABLE_OPTIONAL_REWRITE=0
 ENABLE_NOTION_FEEDBACK_SYNC=0
 ```
 
@@ -99,13 +101,26 @@ Capabilities:
 - Feedback summary and data-quality warnings.
 - Sync write guard through `ENABLE_NOTION_FEEDBACK_SYNC`.
 
+### Optional Rewrite
+
+- `src/models/rewrite.py`
+- `src/writing/rewrite_engine.py`
+
+Capabilities:
+
+- Builds a structured `RewritePlan` from AIReview, ArticleQualityReport, and deterministic validators.
+- Exposes rewrite actions and warnings to Notion blocks when enabled.
+- Does not call an LLM.
+- Does not mutate article title, summary, body, or SEO fields.
+- Keeps `automatic_rewrite_performed=False` until a future explicit rewrite phase is implemented.
+
 ## Verification Baseline
 
 Latest local verification:
 
 ```text
 git diff --check: passed
-pytest: 914 passed, 29 skipped
+pytest: 921 passed, 29 skipped
 production_check --market usd_idr_id: PRODUCTION_CHECK_PASSED
 smoke_test --market usd_idr_id: SMOKE_TEST_PASSED
 ```
@@ -160,6 +175,7 @@ ENABLE_PROMPTFOO_EVALS=1 promptfoo eval -c evals/promptfoo.yaml
 ## Known Limits
 
 - Promptfoo currently has only a small skeleton sample set, not the final 20-50 golden samples.
+- Optional rewrite is a plan-only interface. It intentionally does not auto-edit drafts yet.
 - LLM reviewer is wired but disabled by default and should be enabled only after checking `review_profile` configuration.
 - Source enrichment depends on external site availability and can fail because of timeout, extraction quality, paywalls, or anti-bot behavior.
 - The system is still a modular monolith. Langfuse, LangGraph, LlamaIndex, Haystack, Ragas, DeepEval, Argilla, and Label Studio are intentionally not part of the current runtime path.

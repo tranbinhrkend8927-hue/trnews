@@ -679,3 +679,58 @@ class TestSourceQualityGateIntegration:
         notion_source_bundle = exporter.calls[0]["source_bundle"]
         assert "article_quality_report" in notion_source_bundle
         assert "editor_ready_score" in notion_source_bundle["article_quality_report"]
+
+    def test_optional_rewrite_disabled_by_default(self):
+        """Rewrite planning remains opt-in and does not affect the default pipeline."""
+        market = _make_market()
+        items = [_make_news_item("s1", content="A" * 700), _make_news_item("s2", content="B" * 700)]
+        adapter = _FakeAdapter(items=items)
+        registry = _make_config_registry(market)
+        runner = _FakeLLMRunner()
+        pipeline = ArticlePipeline(
+            config_registry=registry,
+            tradingview_adapter=adapter,
+            source_bundle_builder=SourceBundleBuilder(),
+            llm_runner=runner,
+        )
+
+        with mock.patch.dict("os.environ", {"ENABLE_OPTIONAL_REWRITE": "0", "ENABLE_SOURCE_QUALITY_GATE": "0", "ENABLE_SOURCE_ENRICHMENT": "0"}):
+            result = pipeline.run_market("test_market", dry_run=True)
+
+        assert result["status"] == "DRY_RUN_SUCCESS"
+        assert "rewrite_plan" not in result
+
+    def test_optional_rewrite_enabled_adds_plan_without_rewriting_article(self):
+        """Phase rewrite support only emits a plan; it does not mutate the draft."""
+        market = _make_market()
+        items = [_make_news_item("s1", content="A" * 700), _make_news_item("s2", content="B" * 700)]
+        adapter = _FakeAdapter(items=items)
+        registry = _make_config_registry(market)
+        article = _valid_article()
+        runner = _FakeLLMRunner(output=article)
+        exporter = _FakeNotionExporter()
+        pipeline = ArticlePipeline(
+            config_registry=registry,
+            tradingview_adapter=adapter,
+            source_bundle_builder=SourceBundleBuilder(),
+            llm_runner=runner,
+            notion_exporter=exporter,
+        )
+
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "ENABLE_OPTIONAL_REWRITE": "1",
+                "ENABLE_AI_REVIEWER": "1",
+                "ENABLE_QUALITY_REPORT": "1",
+                "ENABLE_SOURCE_QUALITY_GATE": "1",
+                "ENABLE_SOURCE_ENRICHMENT": "0",
+            },
+        ):
+            result = pipeline.run_market("test_market", dry_run=True)
+
+        assert result["status"] == "DRY_RUN_SUCCESS"
+        assert result["rewrite_plan"]["enabled"] is True
+        assert result["rewrite_plan"]["automatic_rewrite_performed"] is False
+        assert result["article"]["body"] == article["body"]
+        assert exporter.calls[0]["source_bundle"]["rewrite_plan"]["enabled"] is True

@@ -278,6 +278,33 @@ def test_blocks_include_article_quality_report_when_available():
     assert any("Warning: source_quality: write_brief_only" in _block_text(block) for block in blocks)
 
 
+def test_blocks_include_rewrite_plan_when_available():
+    article, _, _, bundle, validation, llm, _ = _context()
+    bundle["rewrite_plan"] = {
+        "enabled": True,
+        "status": "suggested",
+        "should_rewrite": True,
+        "automatic_rewrite_performed": False,
+        "reason": "Rewrite is suggested, but automatic rewriting is not enabled in this phase.",
+        "actions": [
+            {
+                "action_type": "remove_or_source_claim",
+                "priority": "high",
+                "suggested_change": "Remove unsupported macro claim.",
+            }
+        ],
+        "warnings": ["missing_article"],
+    }
+
+    blocks = NotionBlockBuilder().build_blocks(article=article, source_bundle=bundle, validation=validation, llm=llm)
+
+    assert any("Rewrite Plan" in _block_text(block) for block in blocks)
+    assert any("Status: suggested" in _block_text(block) for block in blocks)
+    assert any("Automatic rewrite performed: False" in _block_text(block) for block in blocks)
+    assert any("Action: high - remove_or_source_claim" in _block_text(block) for block in blocks)
+    assert any("Rewrite warning: missing_article" in _block_text(block) for block in blocks)
+
+
 def test_long_body_is_chunked():
     long_body = "Sumber\nhttps://example.com/a\n\n" + ("x" * 4000) + "\n\nCatatan risiko\nRisiko."
     article, _, _, bundle, validation, llm, _ = _context(body=long_body)

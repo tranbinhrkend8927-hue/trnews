@@ -43,6 +43,12 @@ src/llm/prompts/article_rewrite/
   user_payload.jinja.md
 ```
 
+当前实现状态：
+
+- `article_review` prompt 已有骨架和结构化输出契约。
+- `article_rewrite` prompt 尚未启用真实 LLM 改写。
+- Optional rewrite 当前通过 `RewritePlan` 暴露改写接口和编辑建议，默认关闭，且不会自动修改正文。
+
 ## Prompt version
 
 示例：
@@ -104,6 +110,8 @@ input_required:
 - writer 失败 -> `LLM_FAILED`
 - reviewer 失败 -> deterministic only + Notion warning
 - rewrite 失败 -> 保留原文 + warning
+
+当前 rewrite 阶段只生成 plan，不执行 LLM rewrite，因此不存在自动改坏正文的风险。
 
 重试必须限制次数，默认：
 
@@ -249,4 +257,3 @@ ENABLE_PROMPTFOO_EVALS=1 promptfoo eval -c evals/promptfoo.yaml
 ```
 
 eval 不应阻塞日常开发，除非明确开启。
-

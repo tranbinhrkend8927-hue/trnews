@@ -109,6 +109,8 @@ class NotionBlockBuilder:
             *_ai_review_blocks(source_bundle),
             _heading(2, "Article Quality Report"),
             *_article_quality_report_blocks(source_bundle),
+            _heading(2, "Rewrite Plan"),
+            *_rewrite_plan_blocks(source_bundle),
             _heading(2, "Article Body"),
         ]
         for chunk in chunk_text(parsed.body):
@@ -329,6 +331,29 @@ def _article_quality_report_blocks(source_bundle: dict | None) -> list[dict]:
         blocks.append(_bulleted_item(f"Grounded claim ratio: {report.get('grounded_claim_ratio')}"))
     blocks.extend(_list_value_blocks("Blocking issue", report.get("blocking_issues")))
     blocks.extend(_list_value_blocks("Warning", report.get("warnings")))
+    return blocks
+
+
+def _rewrite_plan_blocks(source_bundle: dict | None) -> list[dict]:
+    bundle = source_bundle if isinstance(source_bundle, dict) else {}
+    plan = bundle.get("rewrite_plan")
+    if not isinstance(plan, dict):
+        return [_paragraph("Optional rewrite was not run.")]
+    blocks = [
+        _bulleted_item(f"Enabled: {bool(plan.get('enabled'))}"),
+        _bulleted_item(f"Status: {plan.get('status', 'unknown')}"),
+        _bulleted_item(f"Should rewrite: {bool(plan.get('should_rewrite'))}"),
+        _bulleted_item(f"Automatic rewrite performed: {bool(plan.get('automatic_rewrite_performed'))}"),
+        _bulleted_item(f"Reason: {plan.get('reason', '')}"),
+    ]
+    for action in plan.get("actions") or []:
+        if isinstance(action, dict):
+            blocks.append(
+                _bulleted_item(
+                    f"Action: {action.get('priority', 'medium')} - {action.get('action_type', 'unknown')} - {action.get('suggested_change', '')}"
+                )
+            )
+    blocks.extend(_list_value_blocks("Rewrite warning", plan.get("warnings")))
     return blocks
 
 

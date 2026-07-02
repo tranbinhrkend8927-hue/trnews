@@ -21,6 +21,7 @@ from src.planning.brief_builder import build_editorial_brief, format_editorial_b
 from src.planning.brief_validator import validate_editorial_brief
 from src.review.article_reviewer import is_ai_reviewer_enabled, review_article
 from src.review.quality_report import build_article_quality_report
+from src.writing.rewrite_engine import build_rewrite_plan, is_optional_rewrite_enabled
 
 
 LLM_SOURCE_CONTENT_CHAR_LIMIT = 300
@@ -219,6 +220,17 @@ class ArticlePipeline:
             quality_report_output = _model_to_dict(article_quality_report)
             base_result["article_quality_report"] = quality_report_output
             source_bundle_dict["article_quality_report"] = quality_report_output
+
+        if is_optional_rewrite_enabled():
+            rewrite_plan = build_rewrite_plan(
+                article=article_dict,
+                ai_review=base_result.get("ai_review"),
+                article_quality_report=base_result.get("article_quality_report"),
+                validation=validation,
+            )
+            rewrite_plan_dict = _model_to_dict(rewrite_plan)
+            base_result["rewrite_plan"] = rewrite_plan_dict
+            source_bundle_dict["rewrite_plan"] = rewrite_plan_dict
 
         if dry_run and self.notion_exporter is not None:
             notion_result = self.notion_exporter.build_payload(
