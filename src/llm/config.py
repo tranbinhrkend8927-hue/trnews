@@ -60,8 +60,12 @@ def _env_value(env: Mapping[str, str], name: str) -> str:
     return str(env.get(name, "") or "").strip()
 
 
-def _env_first(env: Mapping[str, str], primary: str, legacy: str) -> str:
-    return _env_value(env, primary) or _env_value(env, legacy)
+def _env_first(env: Mapping[str, str], *names: str) -> str:
+    for name in names:
+        value = _env_value(env, name)
+        if value:
+            return value
+    return ""
 
 
 def load_openrouter_config(
@@ -73,7 +77,7 @@ def load_openrouter_config(
     warnings = []
     errors = []
 
-    api_key = str(overrides.get("api_key") or _env_first(env, "LLM_API_KEY", "OPENROUTER_API_KEY")).strip()
+    api_key = str(overrides.get("api_key") or _env_first(env, "OPENAI_API_KEY", "LLM_API_KEY", "OPENROUTER_API_KEY")).strip()
     model = str(
         overrides.get("model")
         or overrides.get("default_model")
@@ -97,7 +101,7 @@ def load_openrouter_config(
     max_retries = min(max_retries, DEFAULT_LLM_MAX_RETRIES)
 
     if not api_key:
-        errors.append({"type": "config_error", "message": "LLM_API_KEY is required.", "retryable": False})
+        errors.append({"type": "config_error", "message": "OPENAI_API_KEY or LLM_API_KEY is required.", "retryable": False})
     if not model:
         errors.append(
             {
@@ -126,4 +130,4 @@ def get_openrouter_api_key(
 ) -> str:
     env = env or os.environ
     overrides = overrides or {}
-    return str(overrides.get("api_key") or _env_first(env, "LLM_API_KEY", "OPENROUTER_API_KEY")).strip()
+    return str(overrides.get("api_key") or _env_first(env, "OPENAI_API_KEY", "LLM_API_KEY", "OPENROUTER_API_KEY")).strip()

@@ -15,9 +15,10 @@ cp .env.example .env
 Minimum values for real LLM:
 
 ```bash
+OPENAI_API_KEY=
 LLM_API_KEY=
-LLM_BASE_URL=https://openrouter.ai/api/v1
-LLM_DEFAULT_MODEL=
+LLM_BASE_URL=https://api.openai.com/v1
+LLM_DEFAULT_MODEL=gpt-5.5
 LLM_WRITER_MODEL=
 LLM_REVIEW_MODEL=
 LLM_WRITER_MODEL_JA=

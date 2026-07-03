@@ -224,6 +224,6 @@ def test_llm_runner_receives_configured_profile_overrides(monkeypatch):
 
     assert result["success"] is True
     assert runner.calls[0]["profile"] == "article_writer_id"
-    assert runner.calls[0]["overrides"]["model"] == "openrouter/auto"
-    assert runner.calls[0]["overrides"]["temperature"] == 0.35
+    assert runner.calls[0]["overrides"]["model"] == "gpt-5.5"
+    assert runner.calls[0]["overrides"]["temperature"] == 0.2
     assert runner.calls[0]["overrides"]["max_tokens"] == 2200

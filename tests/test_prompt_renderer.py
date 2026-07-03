@@ -109,6 +109,15 @@ def test_rendered_prompt_has_system_and_user_messages_with_source_data():
     assert "source-1" in rendered.messages[1]["content"]
 
 
+def test_article_draft_prompt_requires_quality_validator_headings():
+    rendered = PromptRenderer().render("article_draft", "id", _input_data("id"))
+    user_content = rendered.messages[1]["content"]
+
+    assert "exact section headings on their own lines" in user_content
+    for heading in ["Ikhtisar peristiwa", "Latar belakang", "Dampak pasar", "Hal yang perlu dipantau", "FAQ", "Sumber", "Catatan risiko"]:
+        assert heading in user_content
+
+
 def test_prompt_version_is_non_empty():
     rendered = PromptRenderer().render("article_draft", "id", _input_data("id"))
 

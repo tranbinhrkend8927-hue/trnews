@@ -9,8 +9,10 @@ ALLOWED_OVERRIDE_FIELDS = {
     "temperature",
     "max_tokens",
     "top_p",
-    "response_format",
+    "reasoning",
     "stream",
+    "text_format",
+    "text_verbosity",
 }
 
 
@@ -87,7 +89,9 @@ class LLMTaskPolicy:
     temperature: float
     max_tokens: Optional[int] = None
     top_p: Optional[float] = None
-    response_format: Optional[Dict[str, Any]] = None
+    reasoning: Optional[Dict[str, Any]] = None
+    text_format: Optional[Dict[str, Any]] = None
+    text_verbosity: Optional[str] = None
     stream: bool = False
     json_output: bool = False
     json_schema: Optional[Dict[str, Any]] = None
@@ -107,7 +111,9 @@ class LLMTaskPolicy:
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
             "top_p": self.top_p,
-            "response_format": self.response_format,
+            "reasoning": self.reasoning,
+            "text_format": self.text_format,
+            "text_verbosity": self.text_verbosity,
             "stream": self.stream,
             "json_output": self.json_output,
             "json_schema": self.json_schema,

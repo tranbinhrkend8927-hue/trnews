@@ -134,7 +134,7 @@ class LLMProfileConfig:
     max_tokens: int = 1000
     timeout_seconds: int = 60
     max_retries: int = 1
-    response_format: str = "json_schema"
+    text_format: str = "json_schema"
     supports_json_schema: bool = True
     supports_tools: bool = False
 

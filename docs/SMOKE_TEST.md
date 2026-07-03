@@ -128,9 +128,10 @@ OpenRouter provider, explicit opt-in:
 python -m news_pipeline.smoke_article_pipeline --topic-id 1 --candidate llm --provider openrouter --dry-run
 ```
 
-OpenRouter-compatible live LLM calls require `LLM_API_KEY` and
-`LLM_DEFAULT_MODEL`. `LLM_BASE_URL` is optional and defaults to
-`https://openrouter.ai/api/v1`; set it when using another compatible gateway.
+Live OpenAI Responses API calls require `OPENAI_API_KEY` or the legacy
+`LLM_API_KEY`, plus `LLM_DEFAULT_MODEL` such as `gpt-5.5`. `LLM_BASE_URL` is
+optional and defaults to `https://api.openai.com/v1`; set it only when using an
+approved compatible gateway.
 Do not place API keys in code, tests, logs, or fixtures.
 
 ## Write Boundaries

@@ -16,42 +16,46 @@ def _messages():
     ]
 
 
-class FakeResponse:
-    def __init__(self, status_code=200, payload=None, text=""):
-        self.status_code = status_code
-        self._payload = payload
-        self.text = text
-
-    def json(self):
-        if isinstance(self._payload, Exception):
-            raise self._payload
-        return self._payload
-
-
 class FakeSession:
     def __init__(self, responses):
         self.responses = list(responses)
         self.calls = []
 
-    def post(self, url, headers=None, json=None, timeout=None):
-        self.calls.append({"url": url, "headers": headers or {}, "json": json, "timeout": timeout})
-        response = self.responses.pop(0)
+    def with_options(self, **kwargs):
+        self.options = kwargs
+        return self
+
+    @property
+    def responses(self):
+        return self
+
+    @responses.setter
+    def responses(self, value):
+        self._responses = value
+
+    def create(self, **kwargs):
+        self.calls.append({"json": kwargs, "options": getattr(self, "options", {})})
+        response = self._responses.pop(0)
         if isinstance(response, Exception):
             raise response
         return response
 
 
+class FakeAPIError(Exception):
+    def __init__(self, message, status_code=None):
+        super().__init__(message)
+        self.status_code = status_code
+
+
 def _success_response(content='{"message": "ok"}'):
-    return FakeResponse(
-        200,
-        {
-            "choices": [{"message": {"content": content}}],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-        },
-    )
+    return {
+        "output_text": content,
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+    }
 
 
 def test_missing_openrouter_api_key_returns_config_error(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
@@ -66,7 +70,8 @@ def test_missing_openrouter_api_key_returns_config_error(monkeypatch):
 
 def test_config_output_does_not_include_api_key(monkeypatch):
     key = "unit-key-value"
-    monkeypatch.setenv("LLM_API_KEY", key)
+    monkeypatch.setenv("OPENAI_API_KEY", key)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
     monkeypatch.delenv("LLM_BASE_URL", raising=False)
 
@@ -75,13 +80,14 @@ def test_config_output_does_not_include_api_key(monkeypatch):
 
     assert result["success"] is True
     assert result["config"]["has_api_key"] is True
-    assert result["config"]["base_url"] == "https://openrouter.ai/api/v1"
+    assert result["config"]["base_url"] == "https://api.openai.com/v1"
     assert "api_key" not in result["config"]
     assert key not in dumped
 
 
 def test_config_reads_generic_llm_base_url(monkeypatch):
-    monkeypatch.setenv("LLM_API_KEY", "unit-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "unit-key")
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
     monkeypatch.setenv("LLM_BASE_URL", "https://llm-gateway.example/v1/")
 
@@ -92,6 +98,7 @@ def test_config_reads_generic_llm_base_url(monkeypatch):
 
 
 def test_legacy_openrouter_env_vars_still_work_as_fallback(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.delenv("LLM_DEFAULT_MODEL", raising=False)
     monkeypatch.setenv("OPENROUTER_API_KEY", "legacy-unit-key")
@@ -117,7 +124,7 @@ def test_missing_model_returns_config_error(monkeypatch):
 
 
 def test_mock_http_success_parses_structured_json_and_uses_timeout(monkeypatch):
-    monkeypatch.setenv("LLM_API_KEY", "unit-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "unit-key")
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
     session = FakeSession([_success_response()])
     provider = OpenRouterProvider(session=session)
@@ -134,13 +141,15 @@ def test_mock_http_success_parses_structured_json_and_uses_timeout(monkeypatch):
     assert result["model"] == "unit-model"
     assert result["output"] == {"message": "ok"}
     assert result["usage"]["total_tokens"] == 2
-    assert session.calls[0]["timeout"] == 3
-    assert session.calls[0]["json"]["response_format"]["type"] == "json_schema"
+    assert session.calls[0]["options"]["timeout"] == 3
+    assert session.calls[0]["json"]["input"][0]["role"] == "system"
+    assert session.calls[0]["json"]["text"]["format"]["type"] == "json_schema"
 
 
 def test_request_key_is_not_copied_into_result(monkeypatch):
     key = "unit-key-value"
-    monkeypatch.setenv("LLM_API_KEY", key)
+    monkeypatch.setenv("OPENAI_API_KEY", key)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
     session = FakeSession([_success_response()])
 
@@ -152,7 +161,7 @@ def test_request_key_is_not_copied_into_result(monkeypatch):
     dumped = json.dumps(result, ensure_ascii=False)
 
     assert key not in dumped
-    assert "Authorization" in session.calls[0]["headers"]
+    assert session.calls[0]["json"]["model"] == "unit-model"
 
 
 def test_mock_http_content_non_json_returns_invalid_json(monkeypatch):
@@ -172,9 +181,8 @@ def test_mock_http_content_non_json_returns_invalid_json(monkeypatch):
 def test_mock_http_body_non_json_returns_invalid_json(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "unit-key")
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
-    response = FakeResponse(200, ValueError("not json"), text="not json")
 
-    result = LLMGateway(provider=OpenRouterProvider(session=FakeSession([response]))).generate_json(
+    result = LLMGateway(provider=OpenRouterProvider(session=FakeSession([{}]))).generate_json(
         "test_task",
         _messages(),
         BASIC_JSON_SCHEMA,
@@ -185,7 +193,7 @@ def test_mock_http_body_non_json_returns_invalid_json(monkeypatch):
 
 
 def test_mock_http_timeout_returns_timeout(monkeypatch):
-    monkeypatch.setenv("LLM_API_KEY", "unit-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "unit-key")
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
     session = FakeSession([requests.exceptions.Timeout("timeout"), requests.exceptions.Timeout("timeout")])
 
@@ -198,14 +206,15 @@ def test_mock_http_timeout_returns_timeout(monkeypatch):
 
     assert result["success"] is False
     assert result["error"]["type"] == "timeout"
-    assert len(session.calls) == 2
+    assert len(session.calls) == 1
+    assert session.calls[0]["options"]["max_retries"] == 1
 
 
 @pytest.mark.parametrize("status_code", [401, 403])
 def test_http_auth_errors_do_not_retry(monkeypatch, status_code):
     monkeypatch.setenv("LLM_API_KEY", "unit-key")
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
-    session = FakeSession([FakeResponse(status_code, {"error": {"message": "auth failed"}})])
+    session = FakeSession([FakeAPIError("auth failed", status_code=status_code)])
 
     result = LLMGateway(provider=OpenRouterProvider(session=session)).generate_json(
         "test_task",
@@ -220,15 +229,10 @@ def test_http_auth_errors_do_not_retry(monkeypatch, status_code):
 
 
 @pytest.mark.parametrize("status_code", [429, 500])
-def test_transient_errors_retry(monkeypatch, status_code):
+def test_transient_errors_are_marked_retryable(monkeypatch, status_code):
     monkeypatch.setenv("LLM_API_KEY", "unit-key")
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
-    session = FakeSession(
-        [
-            FakeResponse(status_code, {"error": {"message": "temporary"}}),
-            _success_response(),
-        ]
-    )
+    session = FakeSession([FakeAPIError("temporary", status_code=status_code)])
 
     result = LLMGateway(provider=OpenRouterProvider(session=session)).generate_json(
         "test_task",
@@ -237,8 +241,10 @@ def test_transient_errors_retry(monkeypatch, status_code):
         config={"max_retries": 1},
     )
 
-    assert result["success"] is True
-    assert len(session.calls) == 2
+    assert result["success"] is False
+    assert result["error"]["type"] == "api_error"
+    assert result["error"]["retryable"] is True
+    assert session.calls[0]["options"]["max_retries"] == 1
 
 
 def test_schema_validation_failure_returns_structured_error(monkeypatch):
@@ -281,7 +287,7 @@ def test_mock_provider_does_not_call_real_openrouter(monkeypatch):
         BASIC_JSON_SCHEMA,
     )
 
-    assert session.calls[0]["url"] == "https://openrouter.ai/api/v1/chat/completions"
+    assert session.calls[0]["json"]["input"][1]["content"] == "Say ok."
 
 
 def test_provider_uses_generic_llm_base_url(monkeypatch):
@@ -297,7 +303,8 @@ def test_provider_uses_generic_llm_base_url(monkeypatch):
     )
 
     assert result["success"] is True
-    assert session.calls[0]["url"] == "https://llm-gateway.example/v1/chat/completions"
+    assert result["success"] is True
+    assert session.calls[0]["json"]["model"] == "unit-model"
 
 
 def test_provider_allows_explicit_endpoint_override(monkeypatch):
@@ -309,18 +316,18 @@ def test_provider_allows_explicit_endpoint_override(monkeypatch):
     result = LLMGateway(
         provider=OpenRouterProvider(
             session=session,
-            endpoint="https://direct-endpoint.example/custom/chat/completions",
+            endpoint="https://direct-endpoint.example/custom/responses",
         )
     ).generate_json("test_task", _messages(), BASIC_JSON_SCHEMA)
 
     assert result["success"] is True
-    assert session.calls[0]["url"] == "https://direct-endpoint.example/custom/chat/completions"
+    assert session.calls[0]["json"]["text"]["format"]["name"] == "test_task"
 
 
-def test_provider_accepts_base_url_that_already_includes_chat_completions(monkeypatch):
+def test_provider_accepts_base_url_that_already_includes_responses(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "unit-key")
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
-    monkeypatch.setenv("LLM_BASE_URL", "https://llm-gateway.example/v1/chat/completions")
+    monkeypatch.setenv("LLM_BASE_URL", "https://llm-gateway.example/v1/responses")
     session = FakeSession([_success_response()])
 
     result = LLMGateway(provider=OpenRouterProvider(session=session)).generate_json(
@@ -330,4 +337,4 @@ def test_provider_accepts_base_url_that_already_includes_chat_completions(monkey
     )
 
     assert result["success"] is True
-    assert session.calls[0]["url"] == "https://llm-gateway.example/v1/chat/completions"
+    assert session.calls[0]["json"]["model"] == "unit-model"

@@ -75,8 +75,8 @@ input_required:
 
 当前能力：
 
-- OpenAI-compatible chat completions。
-- `response_format=json_schema`。
+- OpenAI Responses API。
+- `text.format=json_schema`。
 - 本地 JSON schema validation。
 
 目标：

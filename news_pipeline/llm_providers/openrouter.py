@@ -9,7 +9,7 @@ import requests
 from ..llm_config import load_openrouter_config
 from ..llm_gateway import llm_error
 from src.llm.client import OpenAICompatibleClient
-from src.llm.model_policies import json_schema_chat_payload
+from src.llm.model_policies import json_schema_responses_payload
 from src.llm.types import LLMTaskError
 
 
@@ -69,7 +69,7 @@ class OpenRouterProvider:
         self.model = ""
 
     def _payload(self, task_name: str, messages: List[Dict[str, Any]], schema: Dict[str, Any], model: str) -> Dict[str, Any]:
-        return json_schema_chat_payload(task_name, model=model, messages=messages, schema=schema)
+        return json_schema_responses_payload(task_name, model=model, messages=messages, schema=schema)
 
     def generate(
         self,
@@ -108,13 +108,13 @@ class OpenRouterProvider:
 
         client = OpenAICompatibleClient(session=self.session, base_url=base_url)
         try:
-            raw_response = client.create_chat_completion(
+            raw_response = client.create_response(
                 payload,
                 timeout_seconds=timeout_seconds,
                 max_retries=max_retries,
                 task_name=task_name,
             )
-            content = raw_response["choices"][0]["message"]["content"]
+            content = raw_response["output_text"]
         except LLMTaskError as exc:
             error = exc.to_dict()
             return _provider_result(
@@ -132,7 +132,7 @@ class OpenRouterProvider:
                 task_name=task_name,
                 raw_response=raw_response,
                 latency_ms=(raw_response.get("_client") or {}).get("latency_ms", 0) if isinstance(raw_response, dict) else 0,
-                error=llm_error("invalid_json", "OpenRouter response does not contain choices[0].message.content.", retryable=False),
+                error=llm_error("invalid_json", "Responses API response does not contain output_text.", retryable=False),
             )
 
         latency_ms = (raw_response.get("_client") or {}).get("latency_ms", 0) if isinstance(raw_response, dict) else 0

@@ -5,7 +5,7 @@ Use this checklist before the first live LLM or Notion run.
 ## 1. Environment
 
 - Copy `.env.example` to `.env`.
-- Set `LLM_API_KEY`, `LLM_BASE_URL`, and at least `LLM_DEFAULT_MODEL` or `LLM_WRITER_MODEL`.
+- Set `OPENAI_API_KEY` or legacy `LLM_API_KEY`, keep `LLM_BASE_URL` on the official default unless you use an approved gateway, and set at least `LLM_DEFAULT_MODEL` or `LLM_WRITER_MODEL`.
 - Set `NOTION_API_KEY`.
 - Set the target parent id, for example `NOTION_DATA_SOURCE_ID_ID`.
 - Never commit real secrets.

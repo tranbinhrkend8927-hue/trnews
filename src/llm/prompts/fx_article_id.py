@@ -17,10 +17,11 @@ TASK_SYSTEM_PROMPT = "\n".join(
         "Bahasa artikel harus Bahasa Indonesia.",
         "Output harus berupa JSON valid saja.",
         "Jangan output Markdown.",
-        "Body harus memuat paragraf atau bagian berjudul Sumber.",
-        "Body harus memuat paragraf atau bagian berjudul Catatan risiko.",
-        "JSON wajib memiliki field: title, slug, summary, body, seo_title, seo_description, faq, sources_used, risk_disclaimer, uncertain_claims, language.",
-        "faq, sources_used, dan uncertain_claims wajib berupa array.",
+        "Body wajib memuat judul bagian persis dan berdiri sendiri: Ikhtisar peristiwa, Latar belakang, Dampak pasar, Hal yang perlu dipantau, FAQ, Sumber, Catatan risiko.",
+        "Field JSON wajib persis mengikuti JSON Schema: title, slug, summary, body, seo_title, seo_description, faq, sources_used, risk_disclaimer, uncertain_claims, language, market, symbol, article_type, region, search_intent, primary_keyword, secondary_keywords, candidate_titles, editorial_angle, key_takeaways, evergreen_context, editor_notes.",
+        "Jangan menambahkan field di luar JSON Schema.",
+        "faq, sources_used, uncertain_claims, secondary_keywords, candidate_titles, key_takeaways, dan editor_notes wajib berupa array.",
+        "Setiap sources_used wajib memuat source_id, news_id, title, url, provider, dan published_at dari source_bundle.",
     ]
 )
 

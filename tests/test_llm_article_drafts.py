@@ -3,6 +3,7 @@ import json
 from news_pipeline import generate_llm_article_draft
 from news_pipeline import llm_article_drafts
 from news_pipeline.llm_gateway import LLMGateway, MockLLMProvider
+from news_pipeline.llm_schemas import LLM_ARTICLE_DRAFT_SCHEMA, validate_json_schema
 
 
 def _topic(**overrides):
@@ -76,10 +77,31 @@ def _llm_output(**overrides):
         "seo_title": "USD/IDR dan Rupiah: Faktor yang Perlu Dipantau",
         "seo_description": "Konteks USD/IDR dan Rupiah untuk pembaca Indonesia berdasarkan sumber berita tersimpan.",
         "faq": [{"question": "Apakah ini rekomendasi transaksi?", "answer": "Tidak."}],
-        "sources_used": [{"news_id": 10, "title": "USD/IDR dan CPI menjadi perhatian"}],
+        "sources_used": [
+            {
+                "source_id": "source-10",
+                "news_id": "10",
+                "title": "USD/IDR dan CPI menjadi perhatian",
+                "url": "https://example.com/source-10",
+                "provider": "Example",
+                "published_at": "2026-07-01T00:00:00Z",
+            }
+        ],
         "risk_disclaimer": "Artikel ini hanya untuk informasi dan edukasi, bukan rekomendasi investasi atau ajakan membeli/menjual aset keuangan.",
         "uncertain_claims": [],
         "language": "id",
+        "market": "Indonesia",
+        "symbol": "USDIDR",
+        "article_type": "fx_news_explainer",
+        "region": "id-ID",
+        "search_intent": "Memahami berita USD/IDR dan faktor yang perlu dipantau.",
+        "primary_keyword": "USDIDR berita forex",
+        "secondary_keywords": ["USDIDR", "rupiah", "dolar AS"],
+        "candidate_titles": ["USD/IDR dan Rupiah: Faktor yang Perlu Dipantau Pembaca Indonesia"],
+        "editorial_angle": "Menjelaskan konteks USD/IDR berdasarkan sumber tanpa saran transaksi.",
+        "key_takeaways": ["USD/IDR menjadi perhatian pembaca Indonesia berdasarkan sumber."],
+        "evergreen_context": "USD/IDR dipengaruhi data ekonomi, kebijakan moneter, dan sentimen risiko.",
+        "editor_notes": [],
     }
     output.update(overrides)
     return output
@@ -123,6 +145,16 @@ def test_mock_llm_success_generates_draft_candidate():
     assert isinstance(candidate["uncertain_claims"], list)
     assert result["safety_result"]
     assert result["quality_result"]
+
+
+def test_debug_mock_article_output_matches_llm_schema():
+    output = generate_llm_article_draft.build_mock_article_output(_source_bundle())
+
+    validation = validate_json_schema(output, LLM_ARTICLE_DRAFT_SCHEMA)
+
+    assert validation == {"valid": True, "errors": []}
+    assert output["sources_used"][0]["source_id"]
+    assert output["sources_used"][0]["provider"] == "Example"
 
 
 def test_result_is_json_serializable():

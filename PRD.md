@@ -417,58 +417,63 @@ markets:
 
 ```yaml
 providers:
-  openrouter:
+  openai:
     base_url_env: LLM_BASE_URL
-    api_key_env: LLM_API_KEY
+    base_url_default: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    api_key_fallback_env: LLM_API_KEY
 
 profiles:
   article_writer_id:
-    provider: openrouter
+    provider: openai
     model_env: LLM_WRITER_MODEL
     fallback_model_env: LLM_DEFAULT_MODEL
-    temperature: 0.35
+    fallback_model_value: gpt-5.5
+    temperature: 0.2
     top_p: 1.0
     max_tokens: 2200
     timeout_seconds: 90
     max_retries: 1
-    response_format: json_schema
+    text_format: json_schema
     supports_json_schema: true
     supports_tools: false
 
   article_reviewer_id:
-    provider: openrouter
+    provider: openai
     model_env: LLM_REVIEW_MODEL
     fallback_model_env: LLM_DEFAULT_MODEL
+    fallback_model_value: gpt-5.5
     temperature: 0.1
     top_p: 1.0
     max_tokens: 1200
     timeout_seconds: 60
     max_retries: 1
-    response_format: json_schema
+    text_format: json_schema
     supports_json_schema: true
     supports_tools: false
 
   grounding_checker_id:
-    provider: openrouter
+    provider: openai
     model_env: LLM_REVIEW_MODEL
     fallback_model_env: LLM_DEFAULT_MODEL
+    fallback_model_value: gpt-5.5
     temperature: 0.0
     top_p: 1.0
     max_tokens: 1000
     timeout_seconds: 60
     max_retries: 1
-    response_format: json_schema
+    text_format: json_schema
     supports_json_schema: true
     supports_tools: false
 ```
 
 ### LLM 参数规则
 
-- 文章生成：temperature 可以 0.25–0.4；
+- 文章生成：temperature 默认 0.2；
 - 审稿 / grounding：temperature 应接近 0；
-- JSON 输出任务优先 `json_schema`；
+- JSON 输出任务优先 Responses API `text.format=json_schema`；
 - 如果 provider 不支持 `json_schema`，必须降级为 `json_object + 本地 Pydantic 校验 + repair`；
-- 不允许业务层随意覆盖 `response_format`；
+- 不允许业务层随意覆盖 `text.format`；
 - 普通调用者只允许覆盖 `temperature`、`max_tokens`；
 - model override 仅限管理员或测试。
 

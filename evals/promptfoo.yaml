@@ -5,11 +5,13 @@
   ],
   "providers": [
     {
-      "id": "openai:chat:{{env.LLM_DEFAULT_MODEL}}",
+      "id": "openai:responses:{{env.LLM_DEFAULT_MODEL}}",
       "config": {
         "temperature": 0.2,
-        "response_format": {
-          "type": "json_object"
+        "text": {
+          "format": {
+            "type": "json_object"
+          }
         }
       }
     }

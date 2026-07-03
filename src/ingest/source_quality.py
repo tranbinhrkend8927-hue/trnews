@@ -69,11 +69,17 @@ def assess_source_quality(
                     has_primary = True
             if text_length > 0:
                 text_lengths.append(text_length)
+            elif quality == "failed":
+                raw_text_length = _raw_text_length(source)
+                if raw_text_length > 0:
+                    text_lengths.append(raw_text_length)
+                if raw_text_length >= effective_min_length:
+                    usable_sources.append(source_id)
+                    has_primary = True
+                elif raw_text_length >= effective_min_length // 2:
+                    usable_sources.append(source_id)
         else:
-            content = str(source.get("content") or "").strip()
-            summary = str(source.get("summary") or "").strip()
-            text = content or summary
-            text_length = len(text)
+            text_length = _raw_text_length(source)
             if text_length > 0:
                 text_lengths.append(text_length)
             if text_length >= effective_min_length:
@@ -133,6 +139,12 @@ def _build_enrichment_map(results: list[dict[str, Any]] | None) -> dict[str, dic
             if source_id:
                 mapping[source_id] = dump
     return mapping
+
+
+def _raw_text_length(source: dict[str, Any]) -> int:
+    content = str(source.get("content") or "").strip()
+    summary = str(source.get("summary") or "").strip()
+    return len(content or summary)
 
 
 def _count_duplicates(sources: list[dict[str, Any]]) -> int:

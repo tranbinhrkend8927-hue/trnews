@@ -80,6 +80,21 @@ class TestAssessSourceQuality:
         assert report.overall_source_quality == "insufficient"
         assert report.recommended_action == "skip_or_manual_review"
 
+    def test_failed_enrichment_falls_back_to_raw_content(self):
+        sources = [
+            {"source_id": "s1", "content": "A" * 900},
+            {"source_id": "s2", "content": "B" * 850},
+        ]
+        enrichment = [
+            {"source_id": "s1", "extraction_quality": "failed", "text_length": 0, "failure_reason": "trafilatura_not_installed"},
+            {"source_id": "s2", "extraction_quality": "failed", "text_length": 0, "failure_reason": "trafilatura_not_installed"},
+        ]
+        report = assess_source_quality(sources, enrichment, min_usable_sources=2, min_text_length=600)
+        assert report.overall_source_quality == "strong"
+        assert report.recommended_action == "write_article"
+        assert report.usable_source_count == 2
+        assert report.extraction_success_rate == 0.0
+
     def test_sources_without_enrichment_uses_content(self):
         sources = [
             {"source_id": "s1", "content": "A" * 700},

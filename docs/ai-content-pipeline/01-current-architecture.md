@@ -222,7 +222,7 @@ ArticlePipeline._run_llm_or_fake_article()
 -> run_llm_task()
 -> build_messages()
 -> get_model_policy()
--> OpenAICompatibleClient.create_chat_completion()
+-> OpenAICompatibleClient.create_response()
 -> parse_llm_json()
 -> validate_json_schema()
 ```
@@ -238,8 +238,8 @@ ArticlePipeline._run_llm_or_fake_article()
 
 当前能力：
 
-- OpenAI-compatible chat completions。
-- `response_format=json_schema`。
+- OpenAI Responses API。
+- `text.format=json_schema`。
 - 本地 JSON schema 校验。
 - 超时和重试。
 - LLM profile 参数已开始传入 runner overrides。

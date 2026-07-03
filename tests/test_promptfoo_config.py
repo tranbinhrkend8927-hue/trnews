@@ -11,7 +11,8 @@ def test_promptfoo_config_is_json_yaml_subset_and_opt_in():
 
     assert config["description"]
     assert config["prompts"] == ["{{article_brief}}"]
-    assert config["providers"][0]["id"] == "openai:chat:{{env.LLM_DEFAULT_MODEL}}"
+    assert config["providers"][0]["id"] == "openai:responses:{{env.LLM_DEFAULT_MODEL}}"
+    assert config["providers"][0]["config"]["text"]["format"]["type"] == "json_object"
     assert len(config["tests"]) >= 3
     assert any(assertion["type"] == "llm-rubric" for assertion in config["defaultTest"]["assert"])
 

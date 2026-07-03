@@ -24,6 +24,7 @@ ARTICLE_DRAFT_SCHEMA = {
 
 LLM_ARTICLE_DRAFT_SCHEMA = {
     "type": "object",
+    "additionalProperties": False,
     "required": [
         "title",
         "slug",
@@ -36,6 +37,18 @@ LLM_ARTICLE_DRAFT_SCHEMA = {
         "risk_disclaimer",
         "uncertain_claims",
         "language",
+        "market",
+        "symbol",
+        "article_type",
+        "region",
+        "search_intent",
+        "primary_keyword",
+        "secondary_keywords",
+        "candidate_titles",
+        "editorial_angle",
+        "key_takeaways",
+        "evergreen_context",
+        "editor_notes",
     ],
     "properties": {
         "title": {"type": "string"},
@@ -44,10 +57,48 @@ LLM_ARTICLE_DRAFT_SCHEMA = {
         "body": {"type": "string"},
         "seo_title": {"type": "string"},
         "seo_description": {"type": "string"},
-        "faq": {"type": "array"},
-        "sources_used": {"type": "array"},
+        "faq": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["question", "answer"],
+                "properties": {
+                    "question": {"type": "string"},
+                    "answer": {"type": "string"},
+                },
+            },
+        },
+        "sources_used": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["source_id", "news_id", "title", "url", "provider", "published_at"],
+                "properties": {
+                    "source_id": {"type": "string"},
+                    "news_id": {"type": "string"},
+                    "title": {"type": "string"},
+                    "url": {"type": "string"},
+                    "provider": {"type": "string"},
+                    "published_at": {"type": "string"},
+                },
+            },
+        },
         "risk_disclaimer": {"type": "string"},
-        "uncertain_claims": {"type": "array"},
+        "uncertain_claims": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["claim", "reason", "severity"],
+                "properties": {
+                    "claim": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "severity": {"type": "string"},
+                },
+            },
+        },
         "language": {"type": "string"},
         "market": {"type": "string"},
         "symbol": {"type": "string"},
@@ -55,18 +106,30 @@ LLM_ARTICLE_DRAFT_SCHEMA = {
         "region": {"type": "string"},
         "search_intent": {"type": "string"},
         "primary_keyword": {"type": "string"},
-        "secondary_keywords": {"type": "array"},
-        "candidate_titles": {"type": "array"},
+        "secondary_keywords": {"type": "array", "items": {"type": "string"}},
+        "candidate_titles": {"type": "array", "items": {"type": "string"}},
         "editorial_angle": {"type": "string"},
-        "key_takeaways": {"type": "array"},
+        "key_takeaways": {"type": "array", "items": {"type": "string"}},
         "evergreen_context": {"type": "string"},
-        "editor_notes": {"type": "array"},
+        "editor_notes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["type", "text"],
+                "properties": {
+                    "type": {"type": "string"},
+                    "text": {"type": "string"},
+                },
+            },
+        },
     },
 }
 
 
 LLM_AI_REVIEW_SCHEMA = {
     "type": "object",
+    "additionalProperties": False,
     "required": [
         "publish_readiness",
         "scores",
@@ -81,6 +144,7 @@ LLM_AI_REVIEW_SCHEMA = {
         "publish_readiness": {"type": "string"},
         "scores": {
             "type": "object",
+            "additionalProperties": False,
             "required": [
                 "grounding",
                 "depth",
@@ -102,7 +166,8 @@ LLM_AI_REVIEW_SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object",
-                "required": ["issue_type", "severity", "description"],
+                "additionalProperties": False,
+                "required": ["issue_type", "severity", "location", "description", "suggested_fix"],
                 "properties": {
                     "issue_type": {"type": "string"},
                     "severity": {"type": "string"},
@@ -112,10 +177,10 @@ LLM_AI_REVIEW_SCHEMA = {
                 },
             },
         },
-        "unsupported_claims": {"type": "array"},
-        "overstatements": {"type": "array"},
-        "missing_context": {"type": "array"},
-        "rewrite_suggestions": {"type": "array"},
+        "unsupported_claims": {"type": "array", "items": {"type": "string"}},
+        "overstatements": {"type": "array", "items": {"type": "string"}},
+        "missing_context": {"type": "array", "items": {"type": "string"}},
+        "rewrite_suggestions": {"type": "array", "items": {"type": "string"}},
         "recommended_editor_action": {"type": "string"},
     },
 }

@@ -5,33 +5,66 @@ import pytest
 from src.llm.build_messages import build_messages
 from src.llm.client import OpenAICompatibleClient
 from src.llm.model_policies import get_model_policy
-from src.llm.run_task import run_llm_task
+from src.llm.run_task import generate_article, generate_article_stream, run_llm_task
 from src.llm.types import LLMConfigError, LLMJSONParseError
 
 
-class FakeResponse:
-    def __init__(self, status_code=200, payload=None, text=""):
-        self.status_code = status_code
-        self._payload = payload
-        self.text = text
-
-    def json(self):
-        if isinstance(self._payload, Exception):
-            raise self._payload
-        return self._payload
-
-
-class FakeSession:
+class FakeResponsesClient:
     def __init__(self, responses):
         self.responses = list(responses)
         self.calls = []
 
-    def post(self, url, headers=None, json=None, timeout=None):
-        self.calls.append({"url": url, "headers": headers or {}, "json": json, "timeout": timeout})
-        response = self.responses.pop(0)
+    def with_options(self, **kwargs):
+        self.options = kwargs
+        return self
+
+    @property
+    def responses(self):
+        return self
+
+    @responses.setter
+    def responses(self, value):
+        self._responses = value
+
+    def create(self, **kwargs):
+        self.calls.append({"json": kwargs, "timeout": getattr(self, "options", {}).get("timeout")})
+        response = self._responses.pop(0)
         if isinstance(response, Exception):
             raise response
         return response
+
+    def stream(self, **kwargs):
+        self.calls.append({"json": kwargs, "stream": True})
+        response = self._responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+
+class FakeStream:
+    def __init__(self, deltas, final_response=None):
+        self.deltas = list(deltas)
+        self.final_response = final_response or {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def __iter__(self):
+        for delta in self.deltas:
+            yield {"type": "response.output_text.delta", "delta": delta}
+        yield {"type": "response.completed", "response": self.final_response}
+
+    def get_final_response(self):
+        return self.final_response
+
+
+class FakeBadRequest(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+        self.status_code = 400
 
 
 def _source_bundle():
@@ -77,6 +110,24 @@ def _input_data():
     }
 
 
+def _article_draft_input_data():
+    return {
+        "language": "id",
+        "article_brief": (
+            "language: id\n"
+            "risk_disclaimer: Artikel ini hanya untuk informasi dan edukasi, bukan rekomendasi investasi atau ajakan membeli/menjual aset keuangan.\n"
+            "SOURCE 1\n"
+            "source_id: source-10\n"
+            "news_id: 10\n"
+            "title: USD/IDR dan CPI menjadi perhatian\n"
+            "url: https://example.com/source-10\n"
+            "provider: Example\n"
+            "published_at: 2026-07-01T00:00:00Z\n"
+            "content: Pasar mencermati data AS dan pergerakan Rupiah."
+        ),
+    }
+
+
 def _article_json():
     return json.dumps(
         {
@@ -86,11 +137,32 @@ def _article_json():
             "body": "Pembuka\n\nSumber\nURL: https://example.com/source-10\n\nCatatan risiko\nArtikel ini hanya untuk informasi dan edukasi.",
             "seo_title": "USD/IDR dan Rupiah",
             "seo_description": "Konteks USD/IDR untuk pembaca Indonesia.",
-            "faq": [],
-            "sources_used": [{"news_id": 10, "title": "USD/IDR dan CPI menjadi perhatian"}],
+            "faq": [{"question": "Apa yang perlu dipantau pembaca?", "answer": "Pembaca perlu memantau data AS dan pergerakan Rupiah sesuai sumber."}],
+            "sources_used": [
+                {
+                    "source_id": "source-10",
+                    "news_id": "10",
+                    "title": "USD/IDR dan CPI menjadi perhatian",
+                    "url": "https://example.com/source-10",
+                    "provider": "Example",
+                    "published_at": "2026-07-01T00:00:00Z",
+                }
+            ],
             "risk_disclaimer": "Artikel ini hanya untuk informasi dan edukasi, bukan rekomendasi investasi atau ajakan membeli/menjual aset keuangan.",
             "uncertain_claims": [],
             "language": "id",
+            "market": "forex",
+            "symbol": "USDIDR",
+            "article_type": "fx_news_explainer",
+            "region": "Indonesia",
+            "search_intent": "Memahami faktor yang memengaruhi USD/IDR",
+            "primary_keyword": "USDIDR berita forex",
+            "secondary_keywords": ["Rupiah", "dolar AS"],
+            "candidate_titles": ["USD/IDR dan Rupiah: Faktor yang Perlu Dipantau"],
+            "editorial_angle": "Menjelaskan faktor sumber tanpa saran transaksi.",
+            "key_takeaways": ["Pasar mencermati data AS.", "Rupiah tetap menjadi fokus pembaca Indonesia."],
+            "evergreen_context": "USD/IDR mencerminkan hubungan dolar AS dan Rupiah.",
+            "editor_notes": [],
         },
         ensure_ascii=False,
     )
@@ -154,13 +226,10 @@ def _review_input_data():
 
 
 def _success_response(content=None):
-    return FakeResponse(
-        200,
-        {
-            "choices": [{"message": {"content": content if content is not None else _article_json()}}],
-            "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
-        },
-    )
+    return {
+        "output_text": content if content is not None else _article_json(),
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+    }
 
 
 def test_build_messages_has_versioned_prompts():
@@ -182,8 +251,8 @@ def test_legacy_japan_fx_content_aliases_to_indonesian_fx_article():
 def test_model_policies_hold_task_temperatures(monkeypatch):
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
 
-    assert get_model_policy("fx_article_id").temperature == 0.35
-    assert get_model_policy("article_draft").temperature == 0.35
+    assert get_model_policy("fx_article_id").temperature == 0.2
+    assert get_model_policy("article_draft").temperature == 0.2
     assert get_model_policy("article_draft").task_name == "article_draft"
     assert get_model_policy("article_review").temperature == 0.1
     assert get_model_policy("article_review").json_schema["required"][0] == "publish_readiness"
@@ -196,8 +265,8 @@ def test_model_policies_hold_task_temperatures(monkeypatch):
 def test_run_llm_task_uses_policy_and_allowed_overrides(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "unit-key")
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
-    session = FakeSession([_success_response()])
-    client = OpenAICompatibleClient(session=session)
+    session = FakeResponsesClient([_success_response()])
+    client = OpenAICompatibleClient(client=session)
 
     result = run_llm_task(
         "fx_article_id",
@@ -213,16 +282,19 @@ def test_run_llm_task_uses_policy_and_allowed_overrides(monkeypatch):
     payload = session.calls[0]["json"]
     assert payload["model"] == "unit-model"
     assert payload["temperature"] == 0.11
-    assert payload["max_tokens"] == 321
+    assert payload["max_output_tokens"] == 321
     assert payload["top_p"] == 0.7
-    assert payload["response_format"]["type"] == "json_schema"
+    assert payload["input"][0]["role"] == "system"
+    assert payload["reasoning"] == {"effort": "low"}
+    assert payload["text"]["verbosity"] == "low"
+    assert payload["text"]["format"]["type"] == "json_schema"
 
 
 def test_run_llm_task_supports_article_review(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "unit-key")
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
-    session = FakeSession([_success_response(_ai_review_json())])
-    client = OpenAICompatibleClient(session=session)
+    session = FakeResponsesClient([_success_response(_ai_review_json())])
+    client = OpenAICompatibleClient(client=session)
 
     result = run_llm_task(
         "article_review",
@@ -237,15 +309,80 @@ def test_run_llm_task_supports_article_review(monkeypatch):
     assert result["output"]["publish_readiness"] == "needs_edit"
     payload = session.calls[0]["json"]
     assert payload["temperature"] == 0.05
-    assert payload["max_tokens"] == 456
-    assert payload["response_format"]["json_schema"]["name"] == "article_review"
+    assert payload["max_output_tokens"] == 456
+    assert payload["text"]["format"]["name"] == "article_review"
+
+
+def test_generate_article_returns_parsed_dict(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "unit-key")
+    monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
+    session = FakeResponsesClient([_success_response()])
+    client = OpenAICompatibleClient(client=session)
+
+    result = generate_article(_article_draft_input_data(), client=client)
+
+    assert result["title"] == "USD/IDR dan Rupiah: Faktor yang Perlu Dipantau"
+    payload = session.calls[0]["json"]
+    assert "input" in payload
+    assert "messages" not in payload
+    assert payload["text"]["format"]["name"] == "article_draft"
+
+
+def test_generate_article_stream_concatenates_output_text_deltas(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "unit-key")
+    monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
+    article_text = _article_json()
+    stream = FakeStream(
+        [article_text[:40], article_text[40:]],
+        final_response={"usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}},
+    )
+    session = FakeResponsesClient([stream])
+    client = OpenAICompatibleClient(client=session)
+
+    result = generate_article_stream(_article_draft_input_data(), client=client)
+
+    assert result["language"] == "id"
+    assert session.calls[0]["stream"] is True
+    assert session.calls[0]["json"]["text"]["format"]["type"] == "json_schema"
+
+
+def test_responses_client_retries_without_unsupported_sampling_params(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "unit-key")
+    monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
+    session = FakeResponsesClient(
+        [
+            FakeBadRequest("Unsupported parameter: 'temperature' is not supported with this model."),
+            _success_response(),
+        ]
+    )
+    client = OpenAICompatibleClient(client=session)
+
+    result = run_llm_task("fx_article_id", _input_data(), client=client)
+
+    assert result["success"] is True
+    assert "temperature" in session.calls[0]["json"]
+    assert "temperature" not in session.calls[1]["json"]
+
+
+def test_api_errors_redact_api_key_fragments(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "unit-key")
+    monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
+    session = FakeResponsesClient([FakeBadRequest("Incorrect API key provided: sk-a3c88********aaf8.")])
+    client = OpenAICompatibleClient(client=session)
+
+    with pytest.raises(Exception) as exc_info:
+        run_llm_task("fx_article_id", _input_data(), client=client)
+
+    dumped = json.dumps(exc_info.value.to_dict(), ensure_ascii=False)
+    assert "sk-a3c88" not in dumped
+    assert "[REDACTED]" in dumped
 
 
 def test_run_llm_task_article_review_schema_failure(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "unit-key")
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
-    session = FakeSession([_success_response(json.dumps({"publish_readiness": "ready"}))])
-    client = OpenAICompatibleClient(session=session)
+    session = FakeResponsesClient([_success_response(json.dumps({"publish_readiness": "ready"}))])
+    client = OpenAICompatibleClient(client=session)
 
     with pytest.raises(Exception) as exc_info:
         run_llm_task("article_review", _review_input_data(), client=client)
@@ -266,8 +403,8 @@ def test_run_llm_task_rejects_blocked_overrides(monkeypatch):
 def test_invalid_json_error_includes_task_and_prompt_version(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "unit-key")
     monkeypatch.setenv("LLM_DEFAULT_MODEL", "unit-model")
-    session = FakeSession([_success_response("not json")])
-    client = OpenAICompatibleClient(session=session)
+    session = FakeResponsesClient([_success_response("not json")])
+    client = OpenAICompatibleClient(client=session)
 
     with pytest.raises(LLMJSONParseError) as exc_info:
         run_llm_task("fx_article_id", _input_data(), client=client)

@@ -23,7 +23,7 @@ def test_default_registry_validates_with_configured_fallbacks():
 
     assert result.success is True
     assert result.errors == []
-    assert any("LLM_API_KEY" in warning for warning in result.warnings)
+    assert any("OPENAI_API_KEY" in warning for warning in result.warnings)
     assert any("NOTION_DATA_SOURCE_ID_ID" in warning for warning in result.warnings)
 
 

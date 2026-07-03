@@ -30,18 +30,16 @@ def _schema_name(task_name: str) -> str:
     return name or "llm_task"
 
 
-def json_schema_response_format(task_name: str, schema: Dict[str, Any]) -> Dict[str, Any]:
+def json_schema_text_format(task_name: str, schema: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "type": "json_schema",
-        "json_schema": {
-            "name": _schema_name(task_name),
-            "strict": True,
-            "schema": schema,
-        },
+        "name": _schema_name(task_name),
+        "strict": True,
+        "schema": schema,
     }
 
 
-def json_schema_chat_payload(
+def json_schema_responses_payload(
     task_name: str,
     *,
     model: str,
@@ -50,8 +48,12 @@ def json_schema_chat_payload(
 ) -> Dict[str, Any]:
     return {
         "model": model,
-        "messages": messages,
-        "response_format": json_schema_response_format(task_name, schema),
+        "input": messages,
+        "reasoning": {"effort": "low"},
+        "text": {
+            "verbosity": "low",
+            "format": json_schema_text_format(task_name, schema),
+        },
     }
 
 
@@ -82,7 +84,7 @@ def _require_model(model: str, task_name: str) -> str:
 
 def _base_policy(task_name: str, *, temperature: float, json_output: bool = False, json_schema: Dict[str, Any] = None) -> LLMTaskPolicy:
     model = _require_model(_default_model(), task_name)
-    response_format = json_schema_response_format(task_name, json_schema) if json_schema else {"type": "json_object"} if json_output else None
+    text_format = json_schema_text_format(task_name, json_schema) if json_schema else {"type": "json_object"} if json_output else None
     max_tokens = int(_env_value("LLM_MAX_TOKENS") or 900)
     return LLMTaskPolicy(
         task_name=task_name,
@@ -90,7 +92,9 @@ def _base_policy(task_name: str, *, temperature: float, json_output: bool = Fals
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=1.0,
-        response_format=response_format,
+        text_format=text_format,
+        reasoning={"effort": "low"},
+        text_verbosity="low",
         stream=False,
         json_output=json_output,
         json_schema=json_schema,
@@ -104,7 +108,7 @@ def get_model_policy(task_name: str, overrides: Dict[str, Any] = None) -> LLMTas
     if canonical in {"fx_article_id", "article_draft"}:
         policy = _base_policy(
             canonical,
-            temperature=0.35,
+            temperature=0.2,
             json_output=True,
             json_schema=LLM_ARTICLE_DRAFT_SCHEMA,
         )

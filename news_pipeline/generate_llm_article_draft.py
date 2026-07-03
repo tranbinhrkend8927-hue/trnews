@@ -79,6 +79,12 @@ def _source_line(source: Dict[str, Any]) -> str:
 def build_mock_article_output(source_bundle: Dict[str, Any]) -> Dict[str, Any]:
     first_source = (source_bundle.get("sources") or [{}])[0]
     source_line = _source_line(first_source)
+    source_id = str(first_source.get("source_id") or first_source.get("id") or f"source-{first_source.get('news_id') or 'unknown'}")
+    news_id = str(first_source.get("news_id") or first_source.get("id") or "")
+    source_title = str(first_source.get("title") or "Source news tersimpan")
+    source_url = str(first_source.get("url") or first_source.get("canonical_url") or first_source.get("source_url") or "")
+    provider = str(first_source.get("provider") or first_source.get("source") or "unknown")
+    published_at = str(first_source.get("published_at") or "")
     body = "\n\n".join(
         [
             "Pembuka singkat\nUSD/IDR dan Rupiah menjadi perhatian pembaca Indonesia berdasarkan sumber berita yang tersimpan.",
@@ -102,10 +108,31 @@ def build_mock_article_output(source_bundle: Dict[str, Any]) -> Dict[str, Any]:
             {"question": "Apakah ini rekomendasi transaksi?", "answer": "Tidak, ini informasi umum dan edukatif."},
             {"question": "Apakah artikel ini memprediksi arah Rupiah?", "answer": "Tidak, artikel ini hanya merangkum konteks."},
         ],
-        "sources_used": [{"news_id": first_source.get("news_id"), "title": first_source.get("title")}],
+        "sources_used": [
+            {
+                "source_id": source_id,
+                "news_id": news_id,
+                "title": source_title,
+                "url": source_url,
+                "provider": provider,
+                "published_at": published_at,
+            }
+        ],
         "risk_disclaimer": "Artikel ini hanya untuk informasi dan edukasi, bukan rekomendasi investasi atau ajakan membeli/menjual aset keuangan.",
         "uncertain_claims": [],
         "language": "id",
+        "market": "Indonesia",
+        "symbol": str(source_bundle.get("symbol") or "").upper(),
+        "article_type": "fx_news_explainer",
+        "region": "id-ID",
+        "search_intent": "Memahami berita USD/IDR dan faktor yang perlu dipantau.",
+        "primary_keyword": "USDIDR berita forex",
+        "secondary_keywords": ["USDIDR", "rupiah", "dolar AS"],
+        "candidate_titles": ["USD/IDR dan Rupiah: Faktor yang Perlu Dipantau Pembaca Indonesia"],
+        "editorial_angle": "Menjelaskan konteks USD/IDR berdasarkan sumber tanpa saran transaksi.",
+        "key_takeaways": ["USD/IDR dan Rupiah menjadi perhatian berdasarkan sumber berita yang tersedia."],
+        "evergreen_context": "USD/IDR dipengaruhi data ekonomi, kebijakan moneter, dan sentimen risiko.",
+        "editor_notes": [],
     }
 
 

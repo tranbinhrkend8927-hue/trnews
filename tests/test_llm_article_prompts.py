@@ -81,8 +81,9 @@ def test_prompt_requires_bahasa_indonesia_json_sources_and_risk_sections():
     assert "Bahasa artikel harus Bahasa Indonesia." in text
     assert "Output harus berupa JSON valid saja." in text
     assert "Jangan output Markdown." in text
-    assert "Body harus memuat paragraf atau bagian berjudul Sumber." in text
-    assert "Body harus memuat paragraf atau bagian berjudul Catatan risiko." in text
+    assert "Body wajib memuat judul bagian persis dan berdiri sendiri" in text
+    for heading in ["Ikhtisar peristiwa", "Latar belakang", "Dampak pasar", "Hal yang perlu dipantau", "FAQ", "Sumber", "Catatan risiko"]:
+        assert heading in text
     assert profile["risk_disclaimer"] in text
 
 
